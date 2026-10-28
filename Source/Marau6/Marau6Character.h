@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "TimerManager.h"
 #include "Marau6Character.generated.h"
 
 class UInputComponent;
@@ -15,6 +16,22 @@ class UInputMappingContext;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
+
+/** One replicated snapshot keeps the owner's counters and reload state together. */
+USTRUCT(BlueprintType)
+struct FMarau6AmmoState
+{
+    GENERATED_BODY()
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+    int32 Magazine = 10;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+    int32 Reserve = 30;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+    bool bReloading = false;
+};
 
 /**
  *  A basic first person character
@@ -48,9 +65,25 @@ protected:
     TObjectPtr<UInputAction> PrototypeFireAction;
 
     UPROPERTY(Transient)
+    TObjectPtr<UInputAction> PrototypeReloadAction;
+
+    UPROPERTY(Replicated, VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
+    FMarau6AmmoState AmmoState;
+
+    FTimerHandle ReloadTimer;
+
+
+    UPROPERTY(Transient)
     TObjectPtr<UInputMappingContext> PrototypeFireMapping;
 
     void DoFire();
+    void DoReload();
+
+    UFUNCTION(Server, Reliable)
+    void ServerReload();
+
+    void FinishReload();
+    void CancelReload();
 
     UFUNCTION(Server, Unreliable)
     void ServerFire();
@@ -62,6 +95,9 @@ protected:
 
     /** Server-owned cooldown, never accepted from a client. */
     double LastServerFireTime = -1.0;
+
+    static constexpr int32 PrototypeMagazineCapacity = 10;
+    static constexpr float PrototypeReloadDuration = 2.0f;
 
     static constexpr float PrototypeDamage = 25.0f;
     static constexpr float PrototypeRange = 10000.0f;
@@ -92,6 +128,15 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Health")
     bool IsAlive() const { return Health > 0.0f; }
+
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    int32 GetMagazineAmmo() const { return AmmoState.Magazine; }
+
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    int32 GetReserveAmmo() const { return AmmoState.Reserve; }
+
+    UFUNCTION(BlueprintPure, Category = "Combat")
+    bool IsReloading() const { return AmmoState.bReloading; }
 
     virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
         AController* EventInstigator, AActor* DamageCauser) override;

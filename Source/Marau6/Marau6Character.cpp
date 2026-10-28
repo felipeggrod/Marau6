@@ -73,6 +73,11 @@ void AMarau6Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
                     PrototypeFireAction->ValueType = EInputActionValueType::Boolean;
                     PrototypeFireMapping = NewObject<UInputMappingContext>(this);
                     PrototypeFireMapping->MapKey(PrototypeFireAction, EKeys::LeftMouseButton);
+                    PrototypeReloadAction = NewObject<UInputAction>(this);
+                    PrototypeReloadAction->ValueType = EInputActionValueType::Boolean;
+                    PrototypeFireMapping->MapKey(PrototypeReloadAction, EKeys::R);
+                    EnhancedInputComponent->BindAction(PrototypeReloadAction, ETriggerEvent::Started,
+                        this, &AMarau6Character::DoReload);
                     Subsystem->AddMappingContext(PrototypeFireMapping, 1);
                     EnhancedInputComponent->BindAction(PrototypeFireAction, ETriggerEvent::Started,
                         this, &AMarau6Character::DoFire);
@@ -157,6 +162,7 @@ void AMarau6Character::GetLifetimeReplicatedProps(
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AMarau6Character, Health);
+    DOREPLIFETIME_CONDITION(AMarau6Character, AmmoState, COND_OwnerOnly);
 }
 
 void AMarau6Character::OnRep_Health()
@@ -185,6 +191,11 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     const float AppliedDamage = FMath::Min(DamageAmount, Health);
     Health = FMath::Clamp(Health - AppliedDamage, 0.0f, 100.0f);
 
+    if (!IsAlive())
+    {
+        CancelReload();
+    }
+
     // RepNotify runs on receiving clients, so also update the server explicitly.
     OnRep_Health();
     ForceNetUpdate();
@@ -195,6 +206,7 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
 
 void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    CancelReload();
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
         if (ULocalPlayer* LocalPlayer = PC->GetLocalPlayer())
@@ -214,7 +226,7 @@ void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AMarau6Character::DoFire()
 {
-    if (IsLocallyControlled() && IsAlive())
+    if (IsLocallyControlled() && IsAlive() && !IsReloading() && GetMagazineAmmo() > 0)
     {
         ServerFire();
     }
@@ -222,7 +234,8 @@ void AMarau6Character::DoFire()
 
 void AMarau6Character::ServerFire_Implementation()
 {
-    if (!HasAuthority() || !IsAlive() || !GetController() || !GetWorld())
+    if (!HasAuthority() || !IsAlive() || !GetController() || !GetWorld()
+        || AmmoState.bReloading || AmmoState.Magazine <= 0)
     {
         return;
     }
@@ -241,6 +254,8 @@ void AMarau6Character::ServerFire_Implementation()
         return;
     }
     LastServerFireTime = Now;
+    --AmmoState.Magazine;
+    ForceNetUpdate();
     const FVector End = Start + Aim.Vector() * PrototypeRange;
     FCollisionQueryParams Query(SCENE_QUERY_STAT(Marau6PrototypeFire), false, this);
     FHitResult Hit;
@@ -267,4 +282,61 @@ void AMarau6Character::MulticastShot_Implementation(
         DrawDebugPoint(GetWorld(), End, 8.0f,
             bHitCharacter ? FColor::Green : FColor::Red, false, 0.3f);
     }
+}
+
+
+void AMarau6Character::DoReload()
+{
+    if (IsLocallyControlled() && IsAlive())
+    {
+        ServerReload();
+    }
+}
+
+void AMarau6Character::ServerReload_Implementation()
+{
+    if (!HasAuthority() || !IsAlive() || !GetController() || !GetWorld()
+        || AmmoState.bReloading || AmmoState.Magazine >= PrototypeMagazineCapacity
+        || AmmoState.Reserve <= 0)
+    {
+        return;
+    }
+
+    AmmoState.bReloading = true;
+    GetWorldTimerManager().SetTimer(ReloadTimer, this,
+        &AMarau6Character::FinishReload, PrototypeReloadDuration, false);
+    ForceNetUpdate();
+}
+
+void AMarau6Character::FinishReload()
+{
+    if (!HasAuthority() || !AmmoState.bReloading)
+    {
+        return;
+    }
+    if (!IsAlive() || !GetController())
+    {
+        CancelReload();
+        return;
+    }
+
+    const int32 Needed = FMath::Max(0, PrototypeMagazineCapacity - AmmoState.Magazine);
+    const int32 Transferred = FMath::Min(Needed, AmmoState.Reserve);
+    AmmoState.Magazine += Transferred;
+    AmmoState.Reserve -= Transferred;
+    AmmoState.bReloading = false;
+    ForceNetUpdate();
+}
+
+void AMarau6Character::CancelReload()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(ReloadTimer);
+    }
+    AmmoState.bReloading = false;
 }

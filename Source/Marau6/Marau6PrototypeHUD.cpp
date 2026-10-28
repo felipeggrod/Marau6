@@ -11,13 +11,20 @@ void AMarau6PrototypeHUD::DrawHUD()
     const AMarau6Character* Character = Cast<AMarau6Character>(PlayerOwner->GetPawn());
     if (!Character) return;
 
-    DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.65f), 12.f, 12.f, 300.f, 80.f);
+    DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.65f), 12.f, 12.f, 360.f, 112.f);
     const bool bAlive = Character->IsAlive();
     DrawText(FString::Printf(TEXT("VIDA: %.0f / 100"), Character->GetHealth()),
         bAlive ? FLinearColor::White : FLinearColor::Red, 22.f, 20.f,
         GEngine->GetMediumFont(), 1.f);
-    DrawText(bAlive ? TEXT("Clique esquerdo: disparar") : TEXT("ELIMINADO - reinicie o teste"),
+    DrawText(FString::Printf(TEXT("MUNICAO: %d | RESERVA: %d"),
+        Character->GetMagazineAmmo(), Character->GetReserveAmmo()),
         FLinearColor::White, 22.f, 50.f, GEngine->GetSmallFont(), 1.f);
+    const TCHAR* Status = !bAlive ? TEXT("ELIMINADO - reinicie o teste")
+        : Character->IsReloading() ? TEXT("RECARREGANDO...")
+        : Character->GetMagazineAmmo() == 0 && Character->GetReserveAmmo() == 0
+            ? TEXT("SEM MUNICAO")
+            : TEXT("Clique: disparar | R: recarregar");
+    DrawText(Status, FLinearColor::White, 22.f, 78.f, GEngine->GetSmallFont(), 1.f);
     if (bAlive)
     {
         const float X = Canvas->ClipX * 0.5f;

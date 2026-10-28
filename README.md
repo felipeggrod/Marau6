@@ -34,7 +34,10 @@ O botão esquerdo dispara um tiro instantâneo de teste:
 - Mira e vida aparecem na tela. Linhas temporárias representam os tiros.
 - Paredes e blocos sólidos bloqueiam o disparo.
 - Com zero de vida, o personagem não anda, pula nem atira; a câmera continua livre.
-- Reinicie o teste para restaurar a partida. Ainda não há reaparecimento, modelo de arma, munição ou recarga.
+- Carregador de 10 tiros e reserva inicial de 30; o HUD mostra ambos.
+- R inicia recarga de 2 segundos, transferindo apenas o necessário da reserva.
+- Sem disparar vazio ou durante recarga; morrer interrompe sem transferir munição.
+- Reinicie o teste para restaurar a partida. Ainda não há reaparecimento nem modelo visual de arma.
 
 O servidor dedicado nesta etapa é executado pelo editor. Ainda não há executável dedicado empacotado.
 
@@ -47,8 +50,8 @@ Confirmados manualmente com dois clientes:
 - Vida não fica negativa.
 - Cobertura bloqueia tiros.
 
-Testes automatizados: `Marau6.Combat.Health` e `Marau6.Combat.ServerFire`.
-Eles verificam vida, valores inválidos, morte, acerto/erro de mira, cadência, cobertura, alcance e contrato do RPC em um mundo local de teste. O teste manual complementa a validação em rede.
+Testes automatizados: `Marau6.Combat.Health`, `Marau6.Combat.ServerFire` e `Marau6.Combat.AmmoReload`.
+Eles verificam vida, valores inválidos, morte, acerto/erro de mira, cadência, cobertura, alcance e contrato do RPC em um mundo local de teste. O teste manual complementa a validação em rede. Munição, reserva, recarga pela tecla R e bloqueios de disparo também foram confirmados manualmente com dois clientes; veja docs/municao-recarga.md.
 
 No Console de Automation do editor, execute `Automation RunTests Marau6.Combat`.
 Os testes são compilados somente quando WITH_DEV_AUTOMATION_TESTS está ativo.
