@@ -31,10 +31,14 @@ O botão esquerdo dispara um tiro instantâneo de teste:
 - 25 de dano uniforme, 100 de vida inicial.
 - Intervalo mínimo de 0,25 segundo; alcance de 100 metros.
 - O servidor calcula o acerto e o dano. O cliente não envia alvo, origem nem valor de dano.
-- Mira e vida aparecem na tela. Linhas temporárias representam os tiros.
+- Mira e vida aparecem na tela. Um clarão breve aparece na boca do rifle; superfícies atingidas recebem um brilho temporário. Tiro no vazio não cria impacto.
 - Paredes e blocos sólidos bloqueiam o disparo.
+- Som provisório no tiro aceito: estável para o dono, posicional e atenuado pela distância para os outros. Veja docs/som-disparo.md.
 - Com zero de vida, o personagem não anda, pula nem atira; a câmera continua livre.
-- Reinicie o teste para restaurar a partida. Ainda não há reaparecimento, modelo de arma, munição ou recarga.
+- Carregador de 10 tiros e reserva inicial de 30; o HUD mostra ambos.
+- R inicia recarga de 2 segundos, transferindo apenas o necessário da reserva.
+- Sem disparar vazio ou durante recarga; morrer interrompe sem transferir munição.
+- Reinicie o teste para restaurar a partida. Ainda não há reaparecimento. O rifle provisório do template aparece nas mãos nas duas perspectivas; veja docs/arma-visual.md.
 
 O servidor dedicado nesta etapa é executado pelo editor. Ainda não há executável dedicado empacotado.
 
@@ -47,8 +51,8 @@ Confirmados manualmente com dois clientes:
 - Vida não fica negativa.
 - Cobertura bloqueia tiros.
 
-Testes automatizados: `Marau6.Combat.Health` e `Marau6.Combat.ServerFire`.
-Eles verificam vida, valores inválidos, morte, acerto/erro de mira, cadência, cobertura, alcance e contrato do RPC em um mundo local de teste. O teste manual complementa a validação em rede.
+Testes automatizados: `Marau6.Combat.Health`, `Marau6.Combat.ServerFire` `Marau6.Combat.AmmoReload` `Marau6.Combat.WeaponVisuals`, `Marau6.Combat.ShotEffects` e `Marau6.Combat.ShotAudio`.
+Eles verificam vida, valores inválidos, morte, acerto/erro de mira, cadência, cobertura, alcance e contrato do RPC em um mundo local de teste. O teste manual complementa a validação em rede. Munição, reserva, recarga pela tecla R e bloqueios de disparo também foram confirmados manualmente com dois clientes; veja docs/municao-recarga.md.
 
 No Console de Automation do editor, execute `Automation RunTests Marau6.Combat`.
 Os testes são compilados somente quando WITH_DEV_AUTOMATION_TESTS está ativo.
@@ -58,6 +62,7 @@ Os testes são compilados somente quando WITH_DEV_AUTOMATION_TESTS está ativo.
 - `Source/Marau6`: código C++, HUD e testes.
 - `Content/FirstPerson`: mapa e Blueprints usados pelo protótipo.
 - `Content/Variant_*` e classes correspondentes: variantes originais do template, ainda não integradas ao combate multiplayer validado.
+- `Content/Marau6/Anims`: cópias das poses do rifle adaptadas ao personagem multiplayer.
 - `Config`: configuração do projeto.
 - `docs`: decisões e registro do primeiro marco.
 
