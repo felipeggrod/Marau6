@@ -1,0 +1,33 @@
+# Unreal and Visual Studio generated files
+.vs/
+.vscode/
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+Build/Receipts/
+*.sln
+*.slnx
+*.suo
+*.user
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+UpgradeLog*.htm
+UpgradeLog*.html
+
+# Local safety copies
+/Backup/
+/Source_Backup*/
+/*.zip
+
+# Local secrets and machine settings
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+/LocalSettings/
+
