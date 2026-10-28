@@ -6,12 +6,14 @@
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
 #include "TimerManager.h"
+#include "UObject/SoftObjectPtr.h"
 #include "Marau6Character.generated.h"
 
 class UInputComponent;
 class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
+class UAnimInstance;
 class UInputMappingContext;
 struct FInputActionValue;
 
@@ -44,6 +46,19 @@ class AMarau6Character : public ACharacter
 	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* FirstPersonMesh;
+
+    /** Presentation only: neither mesh participates in damage or collision. */
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Presentation", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<USkeletalMeshComponent> FirstPersonRifle;
+
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Presentation", meta = (AllowPrivateAccess = "true"))
+    TObjectPtr<USkeletalMeshComponent> ThirdPersonRifle;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Presentation")
+    TSoftClassPtr<UAnimInstance> PrototypeFirstPersonPose;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Presentation")
+    TSoftClassPtr<UAnimInstance> PrototypeThirdPersonPose;
 
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
@@ -89,7 +104,9 @@ protected:
     void ServerFire();
 
     UFUNCTION(NetMulticast, Unreliable)
-    void MulticastShot(FVector_NetQuantize Start, FVector_NetQuantize End, bool bHitCharacter);
+    void MulticastShot(FVector_NetQuantize Point, FVector_NetQuantizeNormal Normal, bool bBlockingHit, bool bHitCharacter);
+
+    virtual void BeginPlay() override;
 
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 

@@ -22,6 +22,10 @@ public class Marau6 : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
+        if (Target.bBuildEditor)
+        {
+            PrivateDependencyModuleNames.AddRange(new string[] { "UnrealEd", "BlueprintGraph", "AssetTools" });
+        }
 
 		PublicIncludePaths.AddRange(new string[] {
 			"Marau6",

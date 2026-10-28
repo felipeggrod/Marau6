@@ -18,7 +18,9 @@
 #include "Engine/World.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/PlayerController.h"
-#include "DrawDebugHelpers.h"
+#include "Marau6ShotEffect.h"
+#include "Engine/SkeletalMesh.h"
+#include "UObject/ConstructorHelpers.h"
 
 
 AMarau6Character::AMarau6Character()
@@ -54,6 +56,37 @@ AMarau6Character::AMarau6Character()
 	// Configure character movement
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 	GetCharacterMovement()->AirControl = 0.5f;
+
+    FirstPersonRifle = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("FirstPersonRifle"));
+    FirstPersonRifle->SetupAttachment(FirstPersonMesh, TEXT("HandGrip_R"));
+    FirstPersonRifle->SetCollisionProfileName(TEXT("NoCollision"));
+    FirstPersonRifle->SetGenerateOverlapEvents(false);
+    FirstPersonRifle->SetOnlyOwnerSee(true);
+    FirstPersonRifle->SetCastShadow(false);
+    FirstPersonRifle->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+
+    ThirdPersonRifle = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("ThirdPersonRifle"));
+    ThirdPersonRifle->SetupAttachment(GetMesh(), TEXT("HandGrip_R"));
+    ThirdPersonRifle->SetCollisionProfileName(TEXT("NoCollision"));
+    ThirdPersonRifle->SetGenerateOverlapEvents(false);
+    ThirdPersonRifle->SetOwnerNoSee(true);
+    ThirdPersonRifle->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
+
+    static ConstructorHelpers::FObjectFinder<USkeletalMesh> Rifle(
+        TEXT("/Game/Weapons/Rifle/Meshes/SKM_Rifle.SKM_Rifle"));
+    if (Rifle.Succeeded())
+    {
+        FirstPersonRifle->SetSkeletalMesh(Rifle.Object);
+        ThirdPersonRifle->SetSkeletalMesh(Rifle.Object);
+    }
+
+    // These graphs refer back to character Blueprints. Defer loading until
+    // after native class defaults have finished constructing.
+    PrototypeFirstPersonPose = FSoftObjectPath(
+        TEXT("/Game/Marau6/Anims/ABP_Marau6_FP_Rifle.ABP_Marau6_FP_Rifle_C"));
+    PrototypeThirdPersonPose = FSoftObjectPath(
+        TEXT("/Game/Marau6/Anims/ABP_Marau6_TP_Rifle.ABP_Marau6_TP_Rifle_C"));
+
 }
 
 void AMarau6Character::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -269,21 +302,24 @@ void AMarau6Character::ServerFire_Implementation()
         FDamageEvent DamageEvent;
         Target->TakeDamage(PrototypeDamage, DamageEvent, GetController(), this);
     }
-    MulticastShot(Start, bBlockingHit ? Hit.ImpactPoint : End, bHitCharacter);
+    MulticastShot(bBlockingHit ? Hit.ImpactPoint : End,
+        bBlockingHit ? Hit.ImpactNormal : FVector::ZeroVector, bBlockingHit, bHitCharacter);
 }
 
 void AMarau6Character::MulticastShot_Implementation(
-    FVector_NetQuantize Start, FVector_NetQuantize End, bool bHitCharacter)
+    FVector_NetQuantize Point, FVector_NetQuantizeNormal Normal, bool bBlockingHit, bool bHitCharacter)
 {
-    if (GetNetMode() != NM_DedicatedServer)
+    if (!GetWorld() || GetNetMode() == NM_DedicatedServer) return;
+    // Only an accepted server shot reaches this cosmetic multicast.
+    USkeletalMeshComponent* Rifle = IsLocallyControlled() ? FirstPersonRifle : ThirdPersonRifle;
+    FActorSpawnParameters Spawn;
+    Spawn.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+    if (AMarau6ShotEffect* Effect = GetWorld()->SpawnActor<AMarau6ShotEffect>(
+        AMarau6ShotEffect::StaticClass(), FVector(Point), FRotator::ZeroRotator, Spawn))
     {
-        DrawDebugLine(GetWorld(), Start, End,
-            bHitCharacter ? FColor::Green : FColor::Red, false, 0.2f, 0, 1.5f);
-        DrawDebugPoint(GetWorld(), End, 8.0f,
-            bHitCharacter ? FColor::Green : FColor::Red, false, 0.3f);
+        Effect->Present(Rifle, IsLocallyControlled(), Point, Normal, bBlockingHit, bHitCharacter);
     }
 }
-
 
 void AMarau6Character::DoReload()
 {
@@ -339,4 +375,26 @@ void AMarau6Character::CancelReload()
         World->GetTimerManager().ClearTimer(ReloadTimer);
     }
     AmmoState.bReloading = false;
+}
+
+
+void AMarau6Character::BeginPlay()
+{
+    Super::BeginPlay();
+
+    // The template pose initializes its camera when the owning actor has begun play.
+    if (UClass* ThirdPose = PrototypeThirdPersonPose.LoadSynchronous())
+    {
+        GetMesh()->SetAnimInstanceClass(ThirdPose);
+    }
+    if (UClass* FirstPose = PrototypeFirstPersonPose.LoadSynchronous())
+    {
+        FirstPersonMesh->SetAnimInstanceClass(FirstPose);
+    }
+
+    // The first person graph copies the world body pose even when it is hidden
+    // from the owning camera. Always refresh bones so the hand socket stays current.
+    GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+    FirstPersonMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+    FirstPersonMesh->AddTickPrerequisiteComponent(GetMesh());
 }
