@@ -38,6 +38,7 @@ O botão esquerdo dispara um tiro instantâneo de teste:
 - Carregador de 10 tiros e reserva inicial de 30; o HUD mostra ambos.
 - R inicia recarga de 2 segundos, transferindo apenas o necessário da reserva.
 - Sem disparar vazio ou durante recarga; morrer interrompe sem transferir munição.
+- Area verde: permaneça 5 segundos para extrair; sair cancela. Extraido nao participa mais do combate e o outro jogador continua. Veja docs/partida-extracao.md.
 - Reinicie o teste para restaurar a partida. Ainda não há reaparecimento. O rifle provisório do template aparece nas mãos nas duas perspectivas; veja docs/arma-visual.md.
 
 O servidor dedicado nesta etapa é executado pelo editor. Ainda não há executável dedicado empacotado.
@@ -54,7 +55,9 @@ Confirmados manualmente com dois clientes:
 Testes automatizados: `Marau6.Combat.Health`, `Marau6.Combat.ServerFire` `Marau6.Combat.AmmoReload` `Marau6.Combat.WeaponVisuals`, `Marau6.Combat.ShotEffects` e `Marau6.Combat.ShotAudio`.
 Eles verificam vida, valores inválidos, morte, acerto/erro de mira, cadência, cobertura, alcance e contrato do RPC em um mundo local de teste. O teste manual complementa a validação em rede. Munição, reserva, recarga pela tecla R e bloqueios de disparo também foram confirmados manualmente com dois clientes; veja docs/municao-recarga.md.
 
-No Console de Automation do editor, execute `Automation RunTests Marau6.Combat`.
+Teste adicional de partida: `Marau6.Match.Extraction`.
+
+No Console de Automation do editor, execute `Automation RunTests Marau6` para rodar os sete testes.
 Os testes são compilados somente quando WITH_DEV_AUTOMATION_TESTS está ativo.
 
 ## Organização e direção
@@ -70,3 +73,5 @@ A direção aprovada inclui servidor dedicado autoritativo, backend C#/ASP.NET C
 
 Distribuição pela Steam, quantidade final de jogadores, duração das partidas e ambientação permanecem provisórias.
 
+
+O plugin Fab esta desativado apenas no projeto: a instalacao local apresentou FabToolset RulesError em 29/10/2026. Nao e necessario para o prototipo; a instalacao da engine nao foi modificada.
