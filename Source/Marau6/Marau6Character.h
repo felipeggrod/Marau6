@@ -9,6 +9,7 @@
 #include "UObject/SoftObjectPtr.h"
 #include "Marau6Character.generated.h"
 
+class AMarau6ExtractionZone;
 class UInputComponent;
 class USkeletalMeshComponent;
 class UCameraComponent;
@@ -18,6 +19,17 @@ class UInputMappingContext;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
+
+UENUM(BlueprintType)
+enum class EMarau6RaidState : uint8 { Active, Extracting, Extracted, Eliminated };
+
+USTRUCT()
+struct FMarau6RaidStatus
+{
+    GENERATED_BODY()
+    UPROPERTY() EMarau6RaidState State = EMarau6RaidState::Active;
+    UPROPERTY() double ExtractionEndServerTime = 0.0;
+};
 
 /** One replicated snapshot keeps the owner's counters and reload state together. */
 USTRUCT(BlueprintType)
@@ -106,6 +118,12 @@ protected:
     UFUNCTION(NetMulticast, Unreliable)
     void MulticastShot(FVector_NetQuantize Point, FVector_NetQuantizeNormal Normal, bool bBlockingHit, bool bHitCharacter);
 
+    UPROPERTY(ReplicatedUsing=OnRep_RaidStatus)
+    FMarau6RaidStatus RaidStatus;
+    TWeakObjectPtr<AMarau6ExtractionZone> ExtractionZone;
+    UFUNCTION() void OnRep_RaidStatus();
+    void UpdateExtraction();
+    void CompleteExtraction();
     virtual void BeginPlay() override;
 
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -138,6 +156,11 @@ protected:
 	
 public:
 	AMarau6Character();
+    virtual void Tick(float DeltaSeconds) override;
+    EMarau6RaidState GetRaidState() const { return RaidStatus.State; }
+    bool CanParticipate() const { return IsAlive() && (RaidStatus.State == EMarau6RaidState::Active
+        || RaidStatus.State == EMarau6RaidState::Extracting); }
+    float GetExtractionSecondsRemaining() const;
     
     /** Current health is read-only outside the server damage handler. */
     UFUNCTION(BlueprintPure, Category = "Health")

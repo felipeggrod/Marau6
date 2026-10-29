@@ -1,6 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Marau6Character.h"
+#include "Marau6ExtractionZone.h"
+#include "EngineUtils.h"
+#include "GameFramework/GameStateBase.h"
 #include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -168,7 +171,7 @@ void AMarau6Character::DoAim(float Yaw, float Pitch)
 
 void AMarau6Character::DoMove(float Right, float Forward)
 {
-	if (IsAlive() && GetController())
+	if (CanParticipate() && GetController())
 	{
 		// pass the move inputs
 		AddMovementInput(GetActorRightVector(), Right);
@@ -178,7 +181,7 @@ void AMarau6Character::DoMove(float Right, float Forward)
 
 void AMarau6Character::DoJumpStart()
 {
-	if (!IsAlive()) return;
+	if (!CanParticipate()) return;
 	// pass Jump to the character
 	Jump();
 }
@@ -195,6 +198,7 @@ void AMarau6Character::GetLifetimeReplicatedProps(
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AMarau6Character, Health);
+    DOREPLIFETIME(AMarau6Character, RaidStatus);
     DOREPLIFETIME_CONDITION(AMarau6Character, AmmoState, COND_OwnerOnly);
 }
 
@@ -215,7 +219,7 @@ void AMarau6Character::OnRep_Health()
 float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
     AController* EventInstigator, AActor* DamageCauser)
 {
-    if (!HasAuthority() || !CanBeDamaged() || !IsAlive()
+    if (!HasAuthority() || !CanBeDamaged() || !CanParticipate()
         || !FMath::IsFinite(DamageAmount) || DamageAmount <= 0.0f)
     {
         return 0.0f;
@@ -227,6 +231,10 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     if (!IsAlive())
     {
         CancelReload();
+        RaidStatus.State = EMarau6RaidState::Eliminated;
+        RaidStatus.ExtractionEndServerTime = 0.0;
+        ExtractionZone.Reset();
+        OnRep_RaidStatus();
     }
 
     // RepNotify runs on receiving clients, so also update the server explicitly.
@@ -259,7 +267,7 @@ void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AMarau6Character::DoFire()
 {
-    if (IsLocallyControlled() && IsAlive() && !IsReloading() && GetMagazineAmmo() > 0)
+    if (IsLocallyControlled() && CanParticipate() && !IsReloading() && GetMagazineAmmo() > 0)
     {
         ServerFire();
     }
@@ -267,7 +275,7 @@ void AMarau6Character::DoFire()
 
 void AMarau6Character::ServerFire_Implementation()
 {
-    if (!HasAuthority() || !IsAlive() || !GetController() || !GetWorld()
+    if (!HasAuthority() || !CanParticipate() || !GetController() || !GetWorld()
         || AmmoState.bReloading || AmmoState.Magazine <= 0)
     {
         return;
@@ -296,7 +304,7 @@ void AMarau6Character::ServerFire_Implementation()
     // intentionally gives uniform whole-body damage in this first prototype.
     const bool bBlockingHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Query);
     AMarau6Character* Target = bBlockingHit ? Cast<AMarau6Character>(Hit.GetActor()) : nullptr;
-    const bool bHitCharacter = Target && Target->IsAlive();
+    const bool bHitCharacter = Target && Target->CanParticipate();
     if (bHitCharacter)
     {
         FDamageEvent DamageEvent;
@@ -323,7 +331,7 @@ void AMarau6Character::MulticastShot_Implementation(
 
 void AMarau6Character::DoReload()
 {
-    if (IsLocallyControlled() && IsAlive())
+    if (IsLocallyControlled() && CanParticipate())
     {
         ServerReload();
     }
@@ -331,7 +339,7 @@ void AMarau6Character::DoReload()
 
 void AMarau6Character::ServerReload_Implementation()
 {
-    if (!HasAuthority() || !IsAlive() || !GetController() || !GetWorld()
+    if (!HasAuthority() || !CanParticipate() || !GetController() || !GetWorld()
         || AmmoState.bReloading || AmmoState.Magazine >= PrototypeMagazineCapacity
         || AmmoState.Reserve <= 0)
     {
@@ -350,7 +358,7 @@ void AMarau6Character::FinishReload()
     {
         return;
     }
-    if (!IsAlive() || !GetController())
+    if (!CanParticipate() || !GetController())
     {
         CancelReload();
         return;
@@ -397,4 +405,81 @@ void AMarau6Character::BeginPlay()
     GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->AddTickPrerequisiteComponent(GetMesh());
+}
+
+void AMarau6Character::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    if (HasAuthority()) UpdateExtraction();
+}
+
+float AMarau6Character::GetExtractionSecondsRemaining() const
+{
+    if (RaidStatus.State != EMarau6RaidState::Extracting || !GetWorld()) return 0.f;
+    const AGameStateBase* State = GetWorld()->GetGameState();
+    const double Now = State ? State->GetServerWorldTimeSeconds() : GetWorld()->GetTimeSeconds();
+    return FMath::Max(0.f, static_cast<float>(RaidStatus.ExtractionEndServerTime - Now));
+}
+
+void AMarau6Character::UpdateExtraction()
+{
+    if (!HasAuthority() || !GetWorld() || !CanParticipate()) return;
+    AMarau6ExtractionZone* Zone = ExtractionZone.Get();
+    if (!GetController()) Zone = nullptr;
+    else if (!IsValid(Zone) || !Zone->ContainsCharacter(this))
+    {
+        Zone = nullptr;
+        for (TActorIterator<AMarau6ExtractionZone> It(GetWorld()); It; ++It)
+        {
+            if (It->ContainsCharacter(this)) { Zone = *It; break; }
+        }
+    }
+    if (!Zone)
+    {
+        if (RaidStatus.State == EMarau6RaidState::Extracting)
+        {
+            RaidStatus.State = EMarau6RaidState::Active;
+            RaidStatus.ExtractionEndServerTime = 0.0;
+            ExtractionZone.Reset();
+            ForceNetUpdate();
+        }
+        return;
+    }
+    const double Now = GetWorld()->GetTimeSeconds();
+    if (RaidStatus.State != EMarau6RaidState::Extracting || Zone != ExtractionZone.Get())
+    {
+        ExtractionZone = Zone;
+        RaidStatus.State = EMarau6RaidState::Extracting;
+        RaidStatus.ExtractionEndServerTime = Now + FMath::Clamp(Zone->GetHoldSeconds(),1.f,60.f);
+        ForceNetUpdate();
+    }
+    if (Now >= RaidStatus.ExtractionEndServerTime) CompleteExtraction();
+}
+
+void AMarau6Character::CompleteExtraction()
+{
+    if (!HasAuthority() || !CanParticipate() || RaidStatus.State != EMarau6RaidState::Extracting
+        || !ExtractionZone.IsValid() || !ExtractionZone->ContainsCharacter(this)
+        || !GetController() || GetWorld()->GetTimeSeconds() < RaidStatus.ExtractionEndServerTime) return;
+    RaidStatus.State = EMarau6RaidState::Extracted;
+    RaidStatus.ExtractionEndServerTime = 0.0;
+    ExtractionZone.Reset();
+    CancelReload();
+    OnRep_RaidStatus();
+    ForceNetUpdate();
+}
+
+void AMarau6Character::OnRep_RaidStatus()
+{
+    if (!CanParticipate())
+    {
+        StopJumping();
+        GetCharacterMovement()->StopMovementImmediately();
+        GetCharacterMovement()->DisableMovement();
+    }
+    if (RaidStatus.State == EMarau6RaidState::Extracted)
+    {
+        SetActorHiddenInGame(true);
+        SetActorEnableCollision(false);
+    }
 }
