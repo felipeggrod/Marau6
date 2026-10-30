@@ -1,4 +1,6 @@
 #include "Marau6ItemLedger.h"
+#include "Marau6Persistence.h"
+#include "EngineUtils.h"
 #include "Misc/ScopeExit.h"
 #include "Marau6InventoryComponent.h"
 #include "Marau6LootActor.h"
@@ -10,7 +12,7 @@ bool UMarau6ItemLedger::DoesSupportWorldType(EWorldType::Type Type) const { retu
 bool UMarau6ItemLedger::IsServer() const { return GetWorld() && GetWorld()->IsGameWorld() && GetWorld()->GetNetMode()!=NM_Client; }
 bool UMarau6ItemLedger::Usable(UMarau6InventoryComponent* C) const
 {
-    return IsServer() && IsValid(C) && !BusyOwners.Contains(C->GetSessionInventoryId()) && C->CanInteract() && !Finalized.Contains(C->GetSessionInventoryId())
+    return (!UMarau6Persistence::UsesPersistentBase(GetWorld()) || GetWorld()->GetSubsystem<UMarau6Persistence>()->CanMutate()) && IsServer() && IsValid(C) && !BusyOwners.Contains(C->GetSessionInventoryId()) && C->CanInteract() && !Finalized.Contains(C->GetSessionInventoryId())
         && Owners.FindRef(C->GetSessionInventoryId()).Get()==C;
 }
 FMarau6ItemRecord* UMarau6ItemLedger::Owned(UMarau6InventoryComponent* C,FGuid Id)
@@ -66,7 +68,9 @@ bool UMarau6ItemLedger::Pickup(UMarau6InventoryComponent* C,AMarau6LootActor* Ac
     const FGuid Owner=C->GetSessionInventoryId();
     const int32 Slot=R->Item.IsRifle() && !At(Owner,Marau6Slots::Weapon) ? Marau6Slots::Weapon : Empty(Owner,0,Marau6Slots::BackpackCount);
     if(Slot==INDEX_NONE) return false;
+    const auto Before=*R;
     R->Custody=EMarau6Custody::Inventory; R->OwnerId=Owner; R->Item.Slot=Slot; R->Loot.Reset();
+    if(!Persist()){*R=Before;return false;}
     Actor->Consume(); Sync(Owner); return true;
 }
 bool UMarau6ItemLedger::Move(UMarau6InventoryComponent* C,FGuid Expected,int32 Destination)
@@ -77,8 +81,11 @@ bool UMarau6ItemLedger::Move(UMarau6InventoryComponent* C,FGuid Expected,int32 D
     const int32 Source=R->Item.Slot;
     if(Other && (Other->Custody!=EMarau6Custody::Inventory || !Marau6Slots::Accepts(Source,Other->Item))) return false;
     if(Source==Marau6Slots::Weapon || Destination==Marau6Slots::Weapon) C->Character()->CancelReload();
+    const int32 OldOther=Other?Other->Item.Slot:INDEX_NONE;
     if(Other) Other->Item.Slot=Source;
-    R->Item.Slot=Destination; Sync(C->GetSessionInventoryId()); return true;
+    R->Item.Slot=Destination;
+    if(!Persist()){R->Item.Slot=Source;if(Other)Other->Item.Slot=OldOther;return false;}
+    Sync(C->GetSessionInventoryId()); return true;
 }
 bool UMarau6ItemLedger::SpawnWorld(FGuid Id,FVector Location)
 {
@@ -134,20 +141,37 @@ bool UMarau6ItemLedger::Drop(UMarau6InventoryComponent* C,FGuid Expected)
     if(GetWorld()->LineTraceSingleByChannel(Hit,Pawn->GetPawnViewLocation(),Point,ECC_Visibility,Query)) Point=Hit.ImpactPoint-Pawn->GetActorForwardVector()*25.f;
     if(GetWorld()->LineTraceSingleByChannel(Hit,Point,Point-FVector(0,0,500),ECC_Visibility,Query)) Point=Hit.ImpactPoint+FVector(0,0,25);
     const FGuid Owner=C->GetSessionInventoryId();
-    const bool bTransferred=SpawnWorld(Expected,Point);
+    const auto Before=Records;
+    bool bTransferred=SpawnWorld(Expected,Point);
+    if(bTransferred && !Persist())
+    {if(auto* Created=Records.Find(Expected);Created && Created->Loot.IsValid())Created->Loot->Consume();Records=Before;bTransferred=false;}
     Sync(Owner);return bTransferred;
 }
-void UMarau6ItemLedger::SaveAmmo(UMarau6InventoryComponent* C,int32 Magazine,int32 Reserve)
+bool UMarau6ItemLedger::SaveAmmo(UMarau6InventoryComponent* C,int32 Magazine,int32 Reserve)
 {
-    if(!Usable(C)) return;
+    if(!Usable(C)) return false;
     if(auto* R=At(C->GetSessionInventoryId(),Marau6Slots::Weapon))
-    {R->Item.Magazine=FMath::Clamp(Magazine,0,10);R->Item.Reserve=FMath::Clamp(Reserve,0,9999);Sync(C->GetSessionInventoryId());}
+    {
+        const auto Before=R->Item;
+        R->Item.Magazine=FMath::Clamp(Magazine,0,10);R->Item.Reserve=FMath::Clamp(Reserve,0,30);
+        if(!Persist()){R->Item=Before;return false;}
+        Sync(C->GetSessionInventoryId());return true;
+    }
+    return false;
 }
-void UMarau6ItemLedger::Finalize(UMarau6InventoryComponent* C,bool bExtracted)
+bool UMarau6ItemLedger::Finalize(UMarau6InventoryComponent* C,bool bExtracted)
 {
-    if(!IsServer() || !IsValid(C)) return;
+    if(!IsServer() || !IsValid(C)) return false;
     const FGuid Owner=C->GetSessionInventoryId();
-    if(!Owner.IsValid() || Owners.FindRef(Owner).Get()!=C || Finalized.Contains(Owner)) return;
+    if(!Owner.IsValid() || Owners.FindRef(Owner).Get()!=C) return false;
+    if(Finalized.Contains(Owner)) return true;
+    if(UMarau6Persistence::UsesPersistentBase(GetWorld()))
+    {
+        auto* Bridge=GetWorld()->GetSubsystem<UMarau6Persistence>();
+        if(Bridge->IsEntryPending())
+        {if(!bExtracted)Bridge->DeferDeath(Owner,C->GetOwner()->GetActorLocation());return false;}
+    }
+    const auto Before=Records;
     C->Character()->CancelReload(); Finalized.Add(Owner);
     if(bExtracted) ExtractedOwners.Add(Owner);
     TArray<FGuid> Ids;
@@ -168,7 +192,15 @@ void UMarau6ItemLedger::Finalize(UMarau6InventoryComponent* C,bool bExtracted)
                 if(auto* Pending=Records.Find(Id)) {Pending->Custody=EMarau6Custody::Recovery;Pending->RecoveryLocation=Point;Pending->Loot.Reset();}
         }
     }
-    LostCounts.Add(Owner,Lost); Sync(Owner);
+    LostCounts.Add(Owner,Lost);
+    if(!Persist())
+    {
+        TArray<TWeakObjectPtr<AMarau6LootActor>> Created;
+        for(const auto& Pair:Records)if(Pair.Value.Loot.IsValid() && Before.Contains(Pair.Key) && Pair.Value.Loot!=Before.FindChecked(Pair.Key).Loot)Created.Add(Pair.Value.Loot);
+        for(auto A:Created)if(A.IsValid())A->Consume();
+        Records=Before;Finalized.Remove(Owner);ExtractedOwners.Remove(Owner);LostCounts.Remove(Owner);return false;
+    }
+    Sync(Owner);return true;
 }
 void UMarau6ItemLedger::LootRemoved(AMarau6LootActor* Actor,FGuid Id)
 {
@@ -198,4 +230,79 @@ void UMarau6ItemLedger::Tick(float DeltaTime)
         const auto* R=Records.Find(Id);if(!R || R->Custody!=EMarau6Custody::Recovery) continue;
         const FVector Location=R->RecoveryLocation;SpawnWorld(Id,Location);
     }
+}
+
+bool UMarau6ItemLedger::Persist()
+{
+    if(!UMarau6Persistence::UsesPersistentBase(GetWorld())) return true;
+    return GetWorld()->GetSubsystem<UMarau6Persistence>()->CommitLedger();
+}
+bool UMarau6ItemLedger::Import(UMarau6InventoryComponent* C,FGuid Owner,const TArray<FMarau6Item>& Items)
+{
+    if(!IsServer() || !IsValid(C) || !Owner.IsValid()) return false;
+    TSet<FGuid> Ids;TSet<int32> Slots;
+    for(const auto& I:Items)
+    {if(!I.Id.IsValid() || Ids.Contains(I.Id) || Slots.Contains(I.Slot) || !Marau6Slots::Accepts(I.Slot,I) || Records.Contains(I.Id))return false;Ids.Add(I.Id);Slots.Add(I.Slot);}
+    const FGuid Previous=C->InventoryId;
+    TArray<FGuid> Old;for(const auto& Pair:Records)if(Pair.Value.OwnerId==Previous && Pair.Value.Custody==EMarau6Custody::Inventory)Old.Add(Pair.Key);
+    for(FGuid Id:Old)Records.Remove(Id);Owners.Remove(Previous);
+    C->InventoryId=Owner;Owners.Add(Owner,C);Finalized.Remove(Owner);ExtractedOwners.Remove(Owner);LostCounts.Remove(Owner);
+    for(const auto& I:Items){FMarau6ItemRecord R;R.Item=I;R.OwnerId=Owner;Records.Add(I.Id,R);}
+    Sync(Owner);return true;
+}
+TArray<TSharedPtr<FJsonValue>> UMarau6ItemLedger::Export() const
+{
+    TArray<TSharedPtr<FJsonValue>> Out;
+    TArray<FGuid> Ids;Records.GetKeys(Ids);Ids.Sort([](const FGuid& A,const FGuid& B){return A.ToString()<B.ToString();});
+    for(FGuid Id:Ids)
+    {
+        const auto& R=Records.FindChecked(Id);auto O=MakeShared<FJsonObject>();
+        const bool bOwned=R.Custody==EMarau6Custody::Inventory || R.Custody==EMarau6Custody::Result;
+        O->SetStringField(TEXT("id"),R.Item.Id.ToString(EGuidFormats::DigitsWithHyphensLower));
+        O->SetNumberField(TEXT("kind"),static_cast<int32>(R.Item.Kind));O->SetNumberField(TEXT("slot"),bOwned?R.Item.Slot:-1);
+        O->SetNumberField(TEXT("magazine"),R.Item.Magazine);O->SetNumberField(TEXT("reserve"),R.Item.Reserve);
+        O->SetStringField(TEXT("owner"),bOwned?R.OwnerId.ToString(EGuidFormats::DigitsWithHyphensLower):TEXT(""));
+        O->SetStringField(TEXT("custody"),R.Custody==EMarau6Custody::Result?TEXT("result"):bOwned?TEXT("inventory"):TEXT("world"));
+        Out.Add(MakeShared<FJsonValueObject>(O));
+    }
+    return Out;
+}
+void UMarau6ItemLedger::ResetRound()
+{
+    Records.Empty();Owners.Empty();Finalized.Empty();ExtractedOwners.Empty();LostCounts.Empty();BusyOwners.Empty();
+    TArray<AMarau6LootActor*> Actors;for(TActorIterator<AMarau6LootActor> It(GetWorld());It;++It)Actors.Add(*It);
+    for(auto* A:Actors)A->Consume();
+}
+bool UMarau6ItemLedger::AbandonReserved(FGuid Owner,const TArray<FMarau6Item>& Items,FVector Location)
+{
+    if(!IsServer() || !Owner.IsValid() || Finalized.Contains(Owner))return false;
+    for(const auto& I:Items)if(Records.Contains(I.Id))return false;
+    const auto Before=Records;
+    int32 Lost=0;
+    for(const auto& I:Items)
+    {
+        FMarau6ItemRecord R;R.Item=I;
+        if(Marau6Slots::IsSafe(I.Slot)){R.OwnerId=Owner;R.Custody=EMarau6Custody::Result;}
+        else {R.Custody=EMarau6Custody::Recovery;R.RecoveryLocation=Location+FVector(FMath::Cos(Lost*1.9f)*65,FMath::Sin(Lost*1.9f)*65,-60);++Lost;}
+        Records.Add(I.Id,R);
+        if(R.Custody==EMarau6Custody::Recovery)SpawnWorld(I.Id,R.RecoveryLocation);
+    }
+    Finalized.Add(Owner);LostCounts.Add(Owner,Lost);
+    if(Persist())return true;
+    TArray<TWeakObjectPtr<AMarau6LootActor>> Created;
+    for(const auto& I:Items)if(auto* R=Records.Find(I.Id);R && R->Loot.IsValid())Created.Add(R->Loot);
+    for(auto A:Created)if(A.IsValid())A->Consume();
+    Records=Before;Finalized.Remove(Owner);LostCounts.Remove(Owner);return false;
+}
+
+
+bool UMarau6ItemLedger::FinalizeDisconnected(FGuid Owner,FVector Location)
+{
+    if(Finalized.Contains(Owner))return true;
+    const auto Before=Records;
+    TArray<FMarau6Item> Items;
+    for(const auto& Pair:Records)if(Pair.Value.OwnerId==Owner && Pair.Value.Custody==EMarau6Custody::Inventory)Items.Add(Pair.Value.Item);
+    for(const auto& I:Items)Records.Remove(I.Id);
+    if(AbandonReserved(Owner,Items,Location)){Owners.Remove(Owner);return true;}
+    Records=Before;return false;
 }

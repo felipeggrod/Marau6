@@ -1,6 +1,9 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Marau6Character.h"
+#include "GameFramework/GameModeBase.h"
+#include "GameFramework/PlayerStart.h"
+#include "Marau6Persistence.h"
 #include "Marau6InventoryComponent.h"
 #include "Marau6LootActor.h"
 #include "Marau6ExtractionZone.h"
@@ -213,6 +216,7 @@ void AMarau6Character::GetLifetimeReplicatedProps(
 	TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(AMarau6Character,bAtBase);
 
 	DOREPLIFETIME(AMarau6Character, Health);
     DOREPLIFETIME(AMarau6Character, RaidStatus);
@@ -242,6 +246,8 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
         return 0.0f;
     }
 
+    const float PreviousHealth=Health;
+    const auto PreviousRaid=RaidStatus;
     const float AppliedDamage = FMath::Min(DamageAmount, Health);
     Health = FMath::Clamp(Health - AppliedDamage, 0.0f, 100.0f);
 
@@ -249,7 +255,7 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     {
         CancelReload();
         RaidStatus.State = EMarau6RaidState::Eliminated;
-        Inventory->FinalizeRaid(false);
+        if(!Inventory->FinalizeRaid(false) && UMarau6Persistence::UsesPersistentBase(GetWorld())){Health=PreviousHealth;RaidStatus=PreviousRaid;return 0.f;}
         RaidStatus.ExtractionEndServerTime = 0.0;
         ExtractionZone.Reset();
         OnRep_RaidStatus();
@@ -313,8 +319,8 @@ void AMarau6Character::ServerFire_Implementation()
         return;
     }
     LastServerFireTime = Now;
+    if(!Inventory->SaveEquippedAmmo(AmmoState.Magazine-1,AmmoState.Reserve)) return;
     --AmmoState.Magazine;
-    Inventory->SaveEquippedAmmo(AmmoState.Magazine,AmmoState.Reserve);
     ForceNetUpdate();
     const FVector End = Start + Aim.Vector() * PrototypeRange;
     FCollisionQueryParams Query(SCENE_QUERY_STAT(Marau6PrototypeFire), false, this);
@@ -385,10 +391,10 @@ void AMarau6Character::FinishReload()
 
     const int32 Needed = FMath::Max(0, PrototypeMagazineCapacity - AmmoState.Magazine);
     const int32 Transferred = FMath::Min(Needed, AmmoState.Reserve);
+    if(!Inventory->SaveEquippedAmmo(AmmoState.Magazine+Transferred,AmmoState.Reserve-Transferred)){CancelReload();return;}
     AmmoState.Magazine += Transferred;
     AmmoState.Reserve -= Transferred;
     AmmoState.bReloading = false;
-    Inventory->SaveEquippedAmmo(AmmoState.Magazine,AmmoState.Reserve);
     ForceNetUpdate();
 }
 
@@ -483,7 +489,7 @@ void AMarau6Character::CompleteExtraction()
         || !ExtractionZone.IsValid() || !ExtractionZone->ContainsCharacter(this)
         || !GetController() || GetWorld()->GetTimeSeconds() < RaidStatus.ExtractionEndServerTime) return;
     RaidStatus.State = EMarau6RaidState::Extracted;
-    Inventory->FinalizeRaid(true);
+    if(!Inventory->FinalizeRaid(true)){RaidStatus.State=EMarau6RaidState::Extracting;return;}
     RaidStatus.ExtractionEndServerTime = 0.0;
     ExtractionZone.Reset();
     CancelReload();
@@ -527,7 +533,22 @@ void AMarau6Character::OnInventoryChanged(bool bEquipmentChanged)
         ForceNetUpdate();
     }
 }
-void AMarau6Character::ToggleInventory() { if(IsLocallyControlled()) bInventoryOpen=!bInventoryOpen; }
+void AMarau6Character::ToggleInventory()
+{
+    if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;InventoryMoveSource.Invalidate();}
+}
+void AMarau6Character::ConfirmInventoryMove()
+{
+    if(!IsLocallyControlled() || !CanParticipate() || !bInventoryOpen)
+    {InventoryMoveSource.Invalidate();return;}
+    if(InventoryMoveSource.IsValid())
+    {
+        const FGuid Source=InventoryMoveSource;InventoryMoveSource.Invalidate();
+        const auto* Item=Inventory->GetSnapshot().Items.FindByPredicate([Source](const FMarau6Item& Value){return Value.Id==Source;});
+        if(Item && Item->Slot!=SelectedInventorySlot) Inventory->ServerMove(Source,SelectedInventorySlot);
+    }
+    else if(const auto* Item=Inventory->ItemAt(SelectedInventorySlot)) InventoryMoveSource=Item->Id;
+}
 void AMarau6Character::NextInventorySlot() { if(bInventoryOpen) SelectedInventorySlot=(SelectedInventorySlot+1)%Marau6Slots::Total; }
 void AMarau6Character::PreviousInventorySlot() { if(bInventoryOpen) SelectedInventorySlot=(SelectedInventorySlot+Marau6Slots::Total-1)%Marau6Slots::Total; }
 void AMarau6Character::PickupLoot()
@@ -552,4 +573,65 @@ void AMarau6Character::ProtectSelectedItem()
     const bool bSafe=Marau6Slots::IsSafe(SelectedInventorySlot);
     for(int32 Slot=bSafe?0:Marau6Slots::SafeStart;Slot<(bSafe?Marau6Slots::BackpackCount:Marau6Slots::Weapon);++Slot)
         if(!Inventory->ItemAt(Slot)){Inventory->ServerMove(Item->Id,Slot);break;}
+}
+
+bool AMarau6Character::CanParticipate() const
+{
+    if(bAtBase || !IsAlive() || (RaidStatus.State!=EMarau6RaidState::Active && RaidStatus.State!=EMarau6RaidState::Extracting)) return false;
+    if(HasAuthority() && UMarau6Persistence::UsesPersistentBase(GetWorld()))
+        return GetWorld()->GetSubsystem<UMarau6Persistence>()->CanMutate();
+    return true;
+}
+void AMarau6Character::OnRep_AtBase()
+{
+    SetActorHiddenInGame(bAtBase);SetActorEnableCollision(!bAtBase);
+    if(bAtBase){GetCharacterMovement()->StopMovementImmediately();GetCharacterMovement()->DisableMovement();}
+    else if(IsAlive()){GetCharacterMovement()->SetMovementMode(MOVE_Walking);}
+}
+bool AMarau6Character::FindRaidEntry(FVector& Location,FRotator& Rotation) const
+{
+    if(!GetWorld())return false;
+    TArray<AActor*> Starts;
+    if(auto* Mode=GetWorld()->GetAuthGameMode())
+        if(auto* Preferred=Mode->FindPlayerStart(GetController()))Starts.Add(Preferred);
+    for(TActorIterator<APlayerStart> It(GetWorld());It;++It)Starts.AddUnique(*It);
+    const auto* Capsule=GetCapsuleComponent();
+    const FCollisionShape Shape=FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius()+2.f,Capsule->GetScaledCapsuleHalfHeight()+2.f);
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(Marau6RaidEntry),false,this);
+    for(auto* Start:Starts)
+    {
+        Rotation=FRotator(0,Start->GetActorRotation().Yaw,0);
+        // Keep map-authored height; search nearby spaces instead of embedding pawns
+        // in terrain or placing both players at the same point.
+        for(int32 Attempt=0;Attempt<17;++Attempt)
+        {
+            FVector Offset(0,0,10);
+            if(Attempt>0)
+            {
+                const float Angle=(Attempt-1)%8*PI/4.f;
+                const float Radius=Attempt<=8?150.f:300.f;
+                Offset+=FVector(FMath::Cos(Angle)*Radius,FMath::Sin(Angle)*Radius,0);
+            }
+            const FVector Candidate=Start->GetActorLocation()+Offset;
+            if(!GetWorld()->OverlapBlockingTestByProfile(Candidate,FQuat::Identity,Capsule->GetCollisionProfileName(),Shape,Query))
+            {Location=Candidate;return true;}
+        }
+    }
+    return false;
+}
+bool AMarau6Character::SetAtBase(bool bValue)
+{
+    if(!HasAuthority())return false;
+    if(!bValue)
+    {
+        FVector Location;FRotator Rotation;
+        if(!FindRaidEntry(Location,Rotation))return false;
+        SetActorEnableCollision(true);
+        if(!TeleportTo(Location,Rotation,false,false)){SetActorEnableCollision(false);return false;}
+        GetCharacterMovement()->StopMovementImmediately();
+        Health=100;RaidStatus=FMarau6RaidStatus();ExtractionZone.Reset();LastServerFireTime=-1;bInventoryOpen=false;InventoryMoveSource.Invalidate();
+        if(auto* PC=Cast<APlayerController>(GetController())){PC->SetControlRotation(Rotation);PC->ClientSetRotation(Rotation,true);}
+    }
+    bAtBase=bValue;CancelReload();
+    OnRep_AtBase();if(!bAtBase)OnInventoryChanged(true);ForceNetUpdate();return true;
 }

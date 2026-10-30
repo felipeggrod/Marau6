@@ -56,6 +56,7 @@ UCLASS(abstract)
 class AMarau6Character : public ACharacter
 {
 	GENERATED_BODY()
+    friend class FMarau6InventoryReorderTest;
 
 	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
@@ -120,10 +121,13 @@ protected:
     UFUNCTION(NetMulticast, Unreliable)
     void MulticastShot(FVector_NetQuantize Point, FVector_NetQuantizeNormal Normal, bool bBlockingHit, bool bHitCharacter);
 
+    UPROPERTY(ReplicatedUsing=OnRep_AtBase) bool bAtBase=false;
+    UFUNCTION() void OnRep_AtBase();
     friend class UMarau6ItemLedger;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6InventoryComponent> Inventory;
     bool bInventoryOpen=false;
     int32 SelectedInventorySlot=0;
+    FGuid InventoryMoveSource;
     void ToggleInventory();
     void NextInventorySlot();
     void PreviousInventorySlot();
@@ -174,12 +178,16 @@ public:
     UMarau6InventoryComponent* GetInventory() const { return Inventory; }
     bool HasEquippedRifle() const;
     bool IsInventoryOpen() const { return bInventoryOpen; }
+    void ConfirmInventoryMove();
+    FGuid GetInventoryMoveSource() const { return InventoryMoveSource; }
     int32 GetSelectedInventorySlot() const { return SelectedInventorySlot; }
     void OpenInventoryResult() { bInventoryOpen=true; }
     void OnInventoryChanged(bool bEquipmentChanged);
     EMarau6RaidState GetRaidState() const { return RaidStatus.State; }
-    bool CanParticipate() const { return IsAlive() && (RaidStatus.State == EMarau6RaidState::Active
-        || RaidStatus.State == EMarau6RaidState::Extracting); }
+    bool CanParticipate() const;
+    bool SetAtBase(bool bValue);
+    bool FindRaidEntry(FVector& Location,FRotator& Rotation) const;
+    bool IsAtBase() const { return bAtBase; }
     float GetExtractionSecondsRemaining() const;
     
     /** Current health is read-only outside the server damage handler. */

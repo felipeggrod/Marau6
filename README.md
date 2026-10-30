@@ -8,7 +8,7 @@ Protótipo inicial de extraction shooter, em desenvolvimento. Repositório priva
 - C++ e Blueprints.
 - Visual Studio Community 2026, workload Game development with C++, ferramentas Unreal e Windows SDK.
 - Git e Git LFS. O LFS deve estar instalado antes de baixar os assets.
-- Não é necessário instalar o backend ou PostgreSQL para este protótipo.
+- .NET SDK10 e Docker Desktop para o backend e PostgreSQL locais. Abra o Docker Desktop e execute Iniciar-Marau6.cmd antes de iniciar o Play normal; aguarde Marau6 pronto.
 
 ## Abrir uma cópia
 
@@ -25,7 +25,7 @@ No mapa `Content/FirstPerson/Lvl_FirstPerson.umap`, configure Play:
 - Net Mode: Play As Client.
 - New Editor Window (PIE).
 
-Os dois jogadores devem conseguir andar, olhar e pular. Clique dentro da janela para controlá-la; Shift+F1 libera o cursor.
+Cada janela começa na base. Clique para dar foco; escolha Teste1 com a tecla1 em uma janela e Teste2 com a tecla2 na outra. Prepare o equipamento e pressione B para entrar. Na arena, os dois jogadores devem conseguir andar, olhar e pular. Shift+F1 libera o cursor. Veja [base, stash e persistência](docs/base-stash-persistencia.md).
 
 O botão esquerdo dispara um tiro instantâneo de teste:
 - 25 de dano uniforme, 100 de vida inicial.
@@ -39,7 +39,7 @@ O botão esquerdo dispara um tiro instantâneo de teste:
 - R inicia recarga de 2 segundos, transferindo apenas o necessário da reserva.
 - Sem disparar vazio ou durante recarga; morrer interrompe sem transferir munição.
 - Area verde: permaneça 5 segundos para extrair; sair cancela. Extraido nao participa mais do combate e o outro jogador continua. Veja docs/partida-extracao.md.
-- Reinicie o teste para restaurar a partida. Ainda não há reaparecimento. O rifle provisório do template aparece nas mãos nas duas perspectivas; veja docs/arma-visual.md.
+- Após ambos terminarem, use N na base para uma nova rodada. Há uma entrada por perfil por rodada; reiniciar Play abandona participações abertas e mantém dados persistidos. O rifle provisório do template aparece nas mãos nas duas perspectivas; veja docs/arma-visual.md.
 
 O servidor dedicado nesta etapa é executado pelo editor. Ainda não há executável dedicado empacotado.
 
@@ -57,7 +57,7 @@ Eles verificam vida, valores inválidos, morte, acerto/erro de mira, cadência, 
 
 Teste adicional de partida: `Marau6.Match.Extraction`.
 
-No Console de Automation do editor, execute `Automation RunTests Marau6` para rodar os treze testes.
+No Console de Automation do editor, execute `Automation RunTests Marau6` para rodar os quinze testes.
 Os testes são compilados somente quando WITH_DEV_AUTOMATION_TESTS está ativo.
 
 ## Organização e direção
@@ -87,8 +87,12 @@ O plugin Fab esta desativado apenas no projeto: a instalacao local apresentou Fa
 - Feche o inventário para disparar. Sem rifle equipado, não é possível atirar nem recarregar.
 - Trocar ou transferir rifle preserva carregador e reserva e cancela recarga pendente.
 - Ao morrer, mochila e arma viram loot; safe pocket permanece no resultado. Ao extrair, todos os itens ficam no resultado.
-- O resultado é guardado somente até encerrar esta sessão; stash e persistência entre partidas vêm depois.
+- O fluxo normal usa stash e persistência PostgreSQL. Resultado retorna à base após confirmação; fixtures isoladas mantêm o modo temporário para regressões.
 
 Veja docs/inventario-loot.md para arquitetura, validação e teste integrado.
 
 Ideias, observações e bugs adiados estão registrados em [melhorias futuras](docs/melhorias-futuras.md), incluindo o empilhamento e a suspensão de loot descartado (FUT-001).
+
+## Base e persistência
+
+Dois perfis locais, stash de32 slots, concessão inicial única e reserva do equipamento por partida. Teclas1/2 escolhem perfil; setas e Enter movem itens; B entra e N inicia nova rodada após ambos terminarem. Consulte [preparação, política de abandono e testes](docs/base-stash-persistencia.md). Este fluxo é local de desenvolvimento, sem login de produção.

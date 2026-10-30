@@ -16,6 +16,7 @@ class AMarau6GameMode : public AGameModeBase
 
 public:
 	AMarau6GameMode();
+    virtual void Logout(AController* Exiting) override;
 };
 
 

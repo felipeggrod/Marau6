@@ -14,6 +14,7 @@ class AMarau6LootActor : public AActor
 public:
     AMarau6LootActor();
     const FMarau6Item& GetItem() const { return Item; }
+    EMarau6ItemKind GetSeedKind() const { return SeedKind; }
     void Consume();
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 private:

@@ -1,0 +1,19 @@
+name: marau6
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: marau6
+      POSTGRES_DB: marau6
+      POSTGRES_PASSWORD: ${MARAU6_DB_PASSWORD:?Execute scripts/Start-Marau6.ps1}
+    ports:
+      - "127.0.0.1:55436:5432"
+    volumes:
+      - marau6_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marau6 -d marau6"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  marau6_data:

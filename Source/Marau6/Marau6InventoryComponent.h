@@ -12,8 +12,8 @@ class UMarau6InventoryComponent : public UActorComponent
 public:
     UMarau6InventoryComponent();
     void InitializeForRaid();
-    void SaveEquippedAmmo(int32 Magazine,int32 Reserve);
-    void FinalizeRaid(bool bExtracted);
+    bool SaveEquippedAmmo(int32 Magazine,int32 Reserve);
+    bool FinalizeRaid(bool bExtracted);
     void ApplySnapshot(const FMarau6InventorySnapshot& Value);
     AMarau6LootActor* LookedAtLoot() const;
     const FMarau6InventorySnapshot& GetSnapshot() const { return Snapshot; }
@@ -27,6 +27,7 @@ public:
     UFUNCTION(Server,Reliable) void ServerDrop(FGuid ExpectedId);
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 private:
+    friend class UMarau6ItemLedger;
     FGuid InventoryId;
     UPROPERTY(ReplicatedUsing=OnRep_Snapshot) FMarau6InventorySnapshot Snapshot;
     UPROPERTY(ReplicatedUsing=OnRep_Equipment) FGuid EquippedId;
