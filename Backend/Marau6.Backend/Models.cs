@@ -1,0 +1,44 @@
+namespace Marau6;
+
+public sealed class Conflict(string message) : Exception(message);
+public sealed class Item
+{
+    public Guid Id { get; set; }
+    public int Kind { get; set; }
+    public int Slot { get; set; }
+    public int Magazine { get; set; }
+    public int Reserve { get; set; }
+    public string Owner { get; set; } = "";
+    public string Custody { get; set; } = "inventory";
+    public Item Copy() => (Item)MemberwiseClone();
+}
+public sealed class Profile
+{
+    public Guid Id { get; set; }
+    public int Number { get; set; }
+    public int Revision { get; set; }
+    public List<Item> Items { get; set; } = [];
+}
+public sealed class Participation
+{
+    public int Profile { get; set; }
+    public string Outcome { get; set; } = "active";
+}
+public sealed class Raid
+{
+    public Guid Id { get; set; }
+    public long Sequence { get; set; }
+    public bool Closed { get; set; }
+    public List<Item> Items { get; set; } = [];
+    public List<Participation> Participants { get; set; } = [];
+}
+public sealed class State
+{
+    public List<Profile> Profiles { get; set; } = [];
+    public List<Raid> Raids { get; set; } = [];
+}
+public record MoveCommand(Guid OperationId, int Profile, int Revision, Guid Item, int Destination);
+public record RaidCommand(Guid OperationId, Guid RaidId);
+public record EnterCommand(Guid OperationId, Guid RaidId, int Profile, int Revision);
+public record Result(int Profile, string Outcome);
+public record SnapshotCommand(Guid OperationId, Guid RaidId, long Sequence, List<Item> Items, List<Result> Results);

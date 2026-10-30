@@ -18,7 +18,7 @@ public class Marau6 : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
+			"Slate", "SlateCore", "HTTP", "Json", "JsonUtilities"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -38,7 +38,7 @@ public class Marau6 : ModuleRules
 		});
 
 		// Uncomment if you are using Slate UI
-		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
+		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "HTTP", "Json", "JsonUtilities", "SlateCore" });
 
 		// Uncomment if you are using online features
 		// PrivateDependencyModuleNames.Add("OnlineSubsystem");

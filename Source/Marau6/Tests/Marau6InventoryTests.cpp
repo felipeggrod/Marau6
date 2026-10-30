@@ -1,6 +1,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
 #include "Marau6Character.h"
+#include "Marau6PlayerController.h"
+#include "Engine/LocalPlayer.h"
 #include "Marau6InventoryComponent.h"
 #include "Marau6ItemLedger.h"
 #include "Marau6LootActor.h"
@@ -257,6 +259,55 @@ bool FMarau6RollbackReservationTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Rollback cannot produce overlapping inventory slots"),bUnique);
     if(!bDropped) TestTrue(TEXT("Failed drop restores source item"),I->ItemAt(0) && I->ItemAt(0)->Id==First);
     TestEqual(TEXT("Rollback conserves all identities"),F.Ledger->GetItemCount(),3);
+    return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6InventoryReorderTest,"Marau6.Inventory.RaidReorderInput",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FMarau6InventoryReorderTest::RunTest(const FString& Parameters)
+{
+    FInventoryWorld F;
+    auto* A=F.Pawn(FVector(0,0,96));
+    auto* PCClass=LoadClass<AMarau6PlayerController>(nullptr,TEXT("/Game/FirstPerson/Blueprints/BP_FirstPersonPlayerController.BP_FirstPersonPlayerController_C"));
+    auto* PC=F.World->SpawnActor<AMarau6PlayerController>(PCClass);PC->Possess(A);
+    PC->Player=NewObject<ULocalPlayer>(GEngine);
+    PC->bUseBase=true;PC->bInRaid=true;
+    TestTrue(TEXT("Input fixture owns a local player"),A->IsLocallyControlled());
+    auto* I=A->GetInventory();
+    auto* Loot=F.Loot(EMarau6ItemKind::Supply,FVector(120,0,96));const FGuid Id=Loot->GetItem().Id;
+    TestTrue(TEXT("Pickup fixture"),F.Pickup(I,Loot,Id));
+    A->bInventoryOpen=true;A->SelectedInventorySlot=0;PC->BaseAccept();
+    A->SelectedInventorySlot=3;PC->BaseAccept();
+    TestTrue(TEXT("Enter moves selected item to chosen empty raid slot"),I->ItemAt(3) && I->ItemAt(3)->Id==Id);
+    TestNull(TEXT("Source becomes empty"),I->ItemAt(0));
+    TestEqual(TEXT("Reorder preserves item count"),F.Ledger->GetItemCount(),2);
+    A->SelectedInventorySlot=10;PC->BaseAccept();A->SelectedInventorySlot=3;PC->BaseAccept();
+    TestTrue(TEXT("Incompatible swap leaves supply in backpack"),I->ItemAt(3) && I->ItemAt(3)->Id==Id);
+    A->SelectedInventorySlot=3;PC->BaseAccept();A->SelectedInventorySlot=8;PC->BaseAccept();
+    TestTrue(TEXT("Enter moves supplies into safe pocket"),I->ItemAt(8) && I->ItemAt(8)->Id==Id);
+    A->SelectedInventorySlot=10;PC->BaseAccept();A->SelectedInventorySlot=8;PC->BaseAccept();
+    TestTrue(TEXT("Rifle cannot replace safe item"),I->ItemAt(8) && I->ItemAt(8)->Id==Id);
+    auto* OtherLoot=F.Loot(EMarau6ItemKind::Scrap,FVector(120,0,96));const FGuid OtherId=OtherLoot->GetItem().Id;
+    TestTrue(TEXT("Second pickup"),F.Pickup(I,OtherLoot,OtherId));
+    A->SelectedInventorySlot=0;PC->BaseAccept();A->SelectedInventorySlot=8;PC->BaseAccept();
+    TestTrue(TEXT("Occupied slots swap without losing identity"),I->ItemAt(0) && I->ItemAt(0)->Id==Id && I->ItemAt(8) && I->ItemAt(8)->Id==OtherId);
+    A->SelectedInventorySlot=0;PC->BaseAccept();A->ToggleInventory();A->ToggleInventory();
+    A->SelectedInventorySlot=2;PC->BaseAccept();A->SelectedInventorySlot=4;PC->BaseAccept();
+    TestTrue(TEXT("Closing inventory cancels origin and empty slots do not select"),I->ItemAt(0) && I->ItemAt(0)->Id==Id);
+    A->SelectedInventorySlot=0;PC->BaseAccept();PC->BaseAccept();
+    TestFalse(TEXT("Same slot cancels selection"),A->GetInventoryMoveSource().IsValid());
+    A->bInventoryOpen=false;PC->BaseAccept();
+    TestFalse(TEXT("Closed inventory ignores Enter"),A->GetInventoryMoveSource().IsValid());
+    A->bInventoryOpen=true;A->SelectedInventorySlot=0;PC->BaseAccept();
+    TestTrue(TEXT("Selected source can leave inventory before confirmation"),F.Ledger->Drop(I,Id));
+    auto* Replacement=F.Loot(EMarau6ItemKind::Supply,FVector(0,120,96));const FGuid ReplacementId=Replacement->GetItem().Id;
+    TestTrue(TEXT("Replacement occupies old source slot"),F.Pickup(I,Replacement,ReplacementId));
+    A->SelectedInventorySlot=1;PC->BaseAccept();
+    TestTrue(TEXT("Stale origin cannot move replacement item"),I->ItemAt(0) && I->ItemAt(0)->Id==ReplacementId && !I->ItemAt(1));
+    A->SelectedInventorySlot=0;A->RaidStatus.State=EMarau6RaidState::Extracted;PC->BaseAccept();
+    TestFalse(TEXT("Extracted player cannot select a move"),A->GetInventoryMoveSource().IsValid());
+    A->RaidStatus.State=EMarau6RaidState::Active;
+    A->bInventoryOpen=true;A->Health=0;PC->BaseAccept();
+    TestFalse(TEXT("Eliminated player cannot select a move"),A->GetInventoryMoveSource().IsValid());
+    TestEqual(TEXT("All input operations conserve unique items"),F.Ledger->GetItemCount(),4);
     return true;
 }
 #endif

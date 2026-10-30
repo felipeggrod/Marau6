@@ -1,5 +1,6 @@
 #include "Marau6InventoryComponent.h"
 #include "Marau6Character.h"
+#include "Marau6Persistence.h"
 #include "Marau6ItemLedger.h"
 #include "Marau6LootActor.h"
 #include "Engine/World.h"
@@ -10,7 +11,7 @@ AMarau6Character* UMarau6InventoryComponent::Character() const { return Cast<AMa
 bool UMarau6InventoryComponent::CanInteract() const { auto* C=Character();return C && C->HasAuthority() && C->CanParticipate() && C->GetController() && !Snapshot.bFinalized; }
 void UMarau6InventoryComponent::InitializeForRaid()
 {
-    if(InventoryId.IsValid() || !GetWorld() || !GetOwner()->HasAuthority()) return;
+    if(UMarau6Persistence::UsesPersistentBase(GetWorld()) || InventoryId.IsValid() || !GetWorld() || !GetOwner()->HasAuthority()) return;
     if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) { InventoryId=L->RegisterInventory(this);if(InventoryId.IsValid()) L->Sync(InventoryId); }
 }
 const FMarau6Item* UMarau6InventoryComponent::ItemAt(int32 Slot) const
@@ -26,10 +27,10 @@ void UMarau6InventoryComponent::ApplySnapshot(const FMarau6InventorySnapshot& Va
 void UMarau6InventoryComponent::OnRep_Snapshot()
 { if(auto* C=Character()){C->OnInventoryChanged(false);if(Snapshot.bFinalized) C->OpenInventoryResult();} }
 void UMarau6InventoryComponent::OnRep_Equipment() { if(auto* C=Character()) C->OnInventoryChanged(false); }
-void UMarau6InventoryComponent::SaveEquippedAmmo(int32 Magazine,int32 Reserve)
-{ if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) L->SaveAmmo(this,Magazine,Reserve); }
-void UMarau6InventoryComponent::FinalizeRaid(bool bExtracted)
-{ if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) L->Finalize(this,bExtracted); }
+bool UMarau6InventoryComponent::SaveEquippedAmmo(int32 Magazine,int32 Reserve)
+{ if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) return L->SaveAmmo(this,Magazine,Reserve); return false; }
+bool UMarau6InventoryComponent::FinalizeRaid(bool bExtracted)
+{ if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) return L->Finalize(this,bExtracted); return false; }
 AMarau6LootActor* UMarau6InventoryComponent::LookedAtLoot() const
 {
     auto* C=Character();if(!C || !C->GetWorld() || !C->CanParticipate()) return nullptr;

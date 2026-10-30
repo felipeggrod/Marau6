@@ -31,3 +31,8 @@ UpgradeLog*.html
 *.key
 /LocalSettings/
 
+
+# Backend generated files
+/Backend/**/bin/
+/Backend/**/obj/
+
