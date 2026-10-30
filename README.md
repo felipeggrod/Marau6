@@ -57,7 +57,7 @@ Eles verificam vida, valores inválidos, morte, acerto/erro de mira, cadência, 
 
 Teste adicional de partida: `Marau6.Match.Extraction`.
 
-No Console de Automation do editor, execute `Automation RunTests Marau6` para rodar os sete testes.
+No Console de Automation do editor, execute `Automation RunTests Marau6` para rodar os treze testes.
 Os testes são compilados somente quando WITH_DEV_AUTOMATION_TESTS está ativo.
 
 ## Organização e direção
@@ -75,3 +75,20 @@ Distribuição pela Steam, quantidade final de jogadores, duração das partidas
 
 
 O plugin Fab esta desativado apenas no projeto: a instalacao local apresentou FabToolset RulesError em 29/10/2026. Nao e necessario para o prototipo; a instalacao da engine nao foi modificada.
+
+## Inventário e loot
+
+8 slots de mochila, 2 de safe pocket e 1 de rifle equipado. Itens provisórios já estão no mapa, incluindo rifles, suprimentos e peças. Cada item ocupa um slot individual; não há agrupamento de quantidades no mesmo slot nem consumo de suprimentos nesta etapa.
+
+- E coleta o item sob a mira, até 2,5 metros.
+- TAB abre/fecha o inventário; setas para cima/baixo selecionam o slot.
+- F equipa o rifle selecionado, trocando com a arma atual.
+- G descarta o item selecionado; P move itens pequenos entre mochila e safe pocket.
+- Feche o inventário para disparar. Sem rifle equipado, não é possível atirar nem recarregar.
+- Trocar ou transferir rifle preserva carregador e reserva e cancela recarga pendente.
+- Ao morrer, mochila e arma viram loot; safe pocket permanece no resultado. Ao extrair, todos os itens ficam no resultado.
+- O resultado é guardado somente até encerrar esta sessão; stash e persistência entre partidas vêm depois.
+
+Veja docs/inventario-loot.md para arquitetura, validação e teste integrado.
+
+Ideias, observações e bugs adiados estão registrados em [melhorias futuras](docs/melhorias-futuras.md), incluindo o empilhamento e a suspensão de loot descartado (FUT-001).

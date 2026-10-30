@@ -1,6 +1,8 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Marau6Character.h"
+#include "Marau6InventoryComponent.h"
+#include "Marau6LootActor.h"
 #include "Marau6ExtractionZone.h"
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
@@ -29,6 +31,7 @@
 AMarau6Character::AMarau6Character()
 {
 	bReplicates = true;
+    Inventory=CreateDefaultSubobject<UMarau6InventoryComponent>(TEXT("Inventory"));
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
 	
@@ -114,6 +117,20 @@ void AMarau6Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
                     PrototypeFireMapping->MapKey(PrototypeReloadAction, EKeys::R);
                     EnhancedInputComponent->BindAction(PrototypeReloadAction, ETriggerEvent::Started,
                         this, &AMarau6Character::DoReload);
+                    auto BindInventoryKey = [&](const TCHAR* Name,FKey Key,void (AMarau6Character::*Handler)())
+                    {
+                        UInputAction* Action=NewObject<UInputAction>(this,FName(Name));
+                        Action->ValueType=EInputActionValueType::Boolean;
+                        PrototypeFireMapping->MapKey(Action,Key);
+                        EnhancedInputComponent->BindAction(Action,ETriggerEvent::Started,this,Handler);
+                    };
+                    BindInventoryKey(TEXT("InventoryToggle"),EKeys::Tab,&AMarau6Character::ToggleInventory);
+                    BindInventoryKey(TEXT("InventoryNext"),EKeys::Down,&AMarau6Character::NextInventorySlot);
+                    BindInventoryKey(TEXT("InventoryPrevious"),EKeys::Up,&AMarau6Character::PreviousInventorySlot);
+                    BindInventoryKey(TEXT("LootPickup"),EKeys::E,&AMarau6Character::PickupLoot);
+                    BindInventoryKey(TEXT("ItemDrop"),EKeys::G,&AMarau6Character::DropSelectedItem);
+                    BindInventoryKey(TEXT("ItemEquip"),EKeys::F,&AMarau6Character::EquipSelectedItem);
+                    BindInventoryKey(TEXT("ItemProtect"),EKeys::P,&AMarau6Character::ProtectSelectedItem);
                     Subsystem->AddMappingContext(PrototypeFireMapping, 1);
                     EnhancedInputComponent->BindAction(PrototypeFireAction, ETriggerEvent::Started,
                         this, &AMarau6Character::DoFire);
@@ -232,6 +249,7 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
     {
         CancelReload();
         RaidStatus.State = EMarau6RaidState::Eliminated;
+        Inventory->FinalizeRaid(false);
         RaidStatus.ExtractionEndServerTime = 0.0;
         ExtractionZone.Reset();
         OnRep_RaidStatus();
@@ -267,7 +285,7 @@ void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AMarau6Character::DoFire()
 {
-    if (IsLocallyControlled() && CanParticipate() && !IsReloading() && GetMagazineAmmo() > 0)
+    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle() && !bInventoryOpen && !IsReloading() && GetMagazineAmmo() > 0)
     {
         ServerFire();
     }
@@ -276,7 +294,7 @@ void AMarau6Character::DoFire()
 void AMarau6Character::ServerFire_Implementation()
 {
     if (!HasAuthority() || !CanParticipate() || !GetController() || !GetWorld()
-        || AmmoState.bReloading || AmmoState.Magazine <= 0)
+        || !HasEquippedRifle() || AmmoState.bReloading || AmmoState.Magazine <= 0)
     {
         return;
     }
@@ -296,6 +314,7 @@ void AMarau6Character::ServerFire_Implementation()
     }
     LastServerFireTime = Now;
     --AmmoState.Magazine;
+    Inventory->SaveEquippedAmmo(AmmoState.Magazine,AmmoState.Reserve);
     ForceNetUpdate();
     const FVector End = Start + Aim.Vector() * PrototypeRange;
     FCollisionQueryParams Query(SCENE_QUERY_STAT(Marau6PrototypeFire), false, this);
@@ -331,7 +350,7 @@ void AMarau6Character::MulticastShot_Implementation(
 
 void AMarau6Character::DoReload()
 {
-    if (IsLocallyControlled() && CanParticipate())
+    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle())
     {
         ServerReload();
     }
@@ -340,7 +359,7 @@ void AMarau6Character::DoReload()
 void AMarau6Character::ServerReload_Implementation()
 {
     if (!HasAuthority() || !CanParticipate() || !GetController() || !GetWorld()
-        || AmmoState.bReloading || AmmoState.Magazine >= PrototypeMagazineCapacity
+        || !HasEquippedRifle() || AmmoState.bReloading || AmmoState.Magazine >= PrototypeMagazineCapacity
         || AmmoState.Reserve <= 0)
     {
         return;
@@ -358,7 +377,7 @@ void AMarau6Character::FinishReload()
     {
         return;
     }
-    if (!CanParticipate() || !GetController())
+    if (!CanParticipate() || !HasEquippedRifle() || !GetController())
     {
         CancelReload();
         return;
@@ -369,6 +388,7 @@ void AMarau6Character::FinishReload()
     AmmoState.Magazine += Transferred;
     AmmoState.Reserve -= Transferred;
     AmmoState.bReloading = false;
+    Inventory->SaveEquippedAmmo(AmmoState.Magazine,AmmoState.Reserve);
     ForceNetUpdate();
 }
 
@@ -405,6 +425,7 @@ void AMarau6Character::BeginPlay()
     GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->AddTickPrerequisiteComponent(GetMesh());
+    OnInventoryChanged(false);
 }
 
 void AMarau6Character::Tick(float DeltaSeconds)
@@ -462,6 +483,7 @@ void AMarau6Character::CompleteExtraction()
         || !ExtractionZone.IsValid() || !ExtractionZone->ContainsCharacter(this)
         || !GetController() || GetWorld()->GetTimeSeconds() < RaidStatus.ExtractionEndServerTime) return;
     RaidStatus.State = EMarau6RaidState::Extracted;
+    Inventory->FinalizeRaid(true);
     RaidStatus.ExtractionEndServerTime = 0.0;
     ExtractionZone.Reset();
     CancelReload();
@@ -482,4 +504,52 @@ void AMarau6Character::OnRep_RaidStatus()
         SetActorHiddenInGame(true);
         SetActorEnableCollision(false);
     }
+}
+
+void AMarau6Character::PostInitializeComponents()
+{
+    Super::PostInitializeComponents();
+    if(HasAuthority() && GetWorld() && GetWorld()->IsGameWorld()) Inventory->InitializeForRaid();
+}
+bool AMarau6Character::HasEquippedRifle() const { return Inventory && Inventory->HasRifle(); }
+void AMarau6Character::OnInventoryChanged(bool bEquipmentChanged)
+{
+    const bool bEquipped=HasEquippedRifle();
+    FirstPersonRifle->SetVisibility(bEquipped,true);
+    ThirdPersonRifle->SetVisibility(bEquipped,true);
+    FirstPersonMesh->SetVisibility(bEquipped,true);
+    if(HasAuthority() && bEquipmentChanged && CanParticipate())
+    {
+        CancelReload();
+        const FMarau6Item* Item=Inventory->ItemAt(Marau6Slots::Weapon);
+        AmmoState.Magazine=Item?Item->Magazine:0;
+        AmmoState.Reserve=Item?Item->Reserve:0;
+        ForceNetUpdate();
+    }
+}
+void AMarau6Character::ToggleInventory() { if(IsLocallyControlled()) bInventoryOpen=!bInventoryOpen; }
+void AMarau6Character::NextInventorySlot() { if(bInventoryOpen) SelectedInventorySlot=(SelectedInventorySlot+1)%Marau6Slots::Total; }
+void AMarau6Character::PreviousInventorySlot() { if(bInventoryOpen) SelectedInventorySlot=(SelectedInventorySlot+Marau6Slots::Total-1)%Marau6Slots::Total; }
+void AMarau6Character::PickupLoot()
+{
+    if(!IsLocallyControlled() || !CanParticipate()) return;
+    if(auto* Loot=Inventory->LookedAtLoot()) Inventory->ServerPickup(Loot,Loot->GetItem().Id);
+}
+void AMarau6Character::DropSelectedItem()
+{
+    if(IsLocallyControlled() && CanParticipate() && bInventoryOpen)
+        if(const auto* Item=Inventory->ItemAt(SelectedInventorySlot)) Inventory->ServerDrop(Item->Id);
+}
+void AMarau6Character::EquipSelectedItem()
+{
+    if(IsLocallyControlled() && CanParticipate() && bInventoryOpen)
+        if(const auto* Item=Inventory->ItemAt(SelectedInventorySlot)) Inventory->ServerMove(Item->Id,Marau6Slots::Weapon);
+}
+void AMarau6Character::ProtectSelectedItem()
+{
+    if(!IsLocallyControlled() || !CanParticipate() || !bInventoryOpen) return;
+    const auto* Item=Inventory->ItemAt(SelectedInventorySlot);if(!Item || Item->IsRifle()) return;
+    const bool bSafe=Marau6Slots::IsSafe(SelectedInventorySlot);
+    for(int32 Slot=bSafe?0:Marau6Slots::SafeStart;Slot<(bSafe?Marau6Slots::BackpackCount:Marau6Slots::Weapon);++Slot)
+        if(!Inventory->ItemAt(Slot)){Inventory->ServerMove(Item->Id,Slot);break;}
 }

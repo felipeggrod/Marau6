@@ -9,6 +9,8 @@
 #include "UObject/SoftObjectPtr.h"
 #include "Marau6Character.generated.h"
 
+class UMarau6InventoryComponent;
+class UMarau6ItemLedger;
 class AMarau6ExtractionZone;
 class UInputComponent;
 class USkeletalMeshComponent;
@@ -118,6 +120,18 @@ protected:
     UFUNCTION(NetMulticast, Unreliable)
     void MulticastShot(FVector_NetQuantize Point, FVector_NetQuantizeNormal Normal, bool bBlockingHit, bool bHitCharacter);
 
+    friend class UMarau6ItemLedger;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6InventoryComponent> Inventory;
+    bool bInventoryOpen=false;
+    int32 SelectedInventorySlot=0;
+    void ToggleInventory();
+    void NextInventorySlot();
+    void PreviousInventorySlot();
+    void PickupLoot();
+    void DropSelectedItem();
+    void EquipSelectedItem();
+    void ProtectSelectedItem();
+    virtual void PostInitializeComponents() override;
     UPROPERTY(ReplicatedUsing=OnRep_RaidStatus)
     FMarau6RaidStatus RaidStatus;
     TWeakObjectPtr<AMarau6ExtractionZone> ExtractionZone;
@@ -157,6 +171,12 @@ protected:
 public:
 	AMarau6Character();
     virtual void Tick(float DeltaSeconds) override;
+    UMarau6InventoryComponent* GetInventory() const { return Inventory; }
+    bool HasEquippedRifle() const;
+    bool IsInventoryOpen() const { return bInventoryOpen; }
+    int32 GetSelectedInventorySlot() const { return SelectedInventorySlot; }
+    void OpenInventoryResult() { bInventoryOpen=true; }
+    void OnInventoryChanged(bool bEquipmentChanged);
     EMarau6RaidState GetRaidState() const { return RaidStatus.State; }
     bool CanParticipate() const { return IsAlive() && (RaidStatus.State == EMarau6RaidState::Active
         || RaidStatus.State == EMarau6RaidState::Extracting); }
