@@ -32,6 +32,7 @@ public:
     virtual TStatId GetStatId() const override { RETURN_QUICK_DECLARE_CYCLE_STAT(UMarau6Persistence,STATGROUP_Tickables); }
     const FString& GetStatus() const { return Status; }
 private:
+    friend class FMarau6BotDurabilityTest;
     struct FCommand
     {
         FString Path,Body;

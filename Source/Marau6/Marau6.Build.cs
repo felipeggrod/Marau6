@@ -14,7 +14,7 @@ public class Marau6 : ModuleRules
 			"Engine",
 			"InputCore",
 			"EnhancedInput",
-			"AIModule",
+			"AIModule", "NavigationSystem", // Authoritative bot navigation and arena verification.
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",

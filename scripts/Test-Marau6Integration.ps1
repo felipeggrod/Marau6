@@ -1,5 +1,6 @@
-param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE)
+﻿param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE,[switch]$Bots)
 $ErrorActionPreference='Stop'
+if($Bots -and !$PIE){throw 'Use -Bots junto com -PIE.'}
 $root=Split-Path $PSScriptRoot -Parent
 $settings=Get-Content (Join-Path $root 'LocalSettings/marau6.json') -Raw | ConvertFrom-Json
 $env:MARAU6_DB_PASSWORD=$settings.password
@@ -21,13 +22,27 @@ try {
     for($n=0;$n -lt 50;$n++){try{Invoke-RestMethod 'http://127.0.0.1:5187/health' -Headers @{'X-Marau6-Key'=$settings.apiKey}|Out-Null;$ready=$true;break}catch{Start-Sleep -Milliseconds 200}}
     if(!$ready){throw 'Backend de testes não iniciou.'}
     if($PIE){
+        $testName=if($Bots){'BotsOnlineAndTeardown'}else{'BaseOnlineAndTeardown'}
         $log=Join-Path $root 'LocalSettings/unreal-pie-online.log'
-        $gameArgs=@('"'+(Join-Path $root 'Marau6.uproject')+'"','-unattended','-NullRHI','-nosound','-nop4','-Marau6Integration',"-Marau6IntegrationRun=$runId",'"-ExecCmds=Automation RunTests EditorLifecycle.BaseOnlineAndTeardown"','"-TestExit=Automation Test Queue Empty"','"-AbsLog='+$log+'"')
+        $gameArgs=@('"'+(Join-Path $root 'Marau6.uproject')+'"','-unattended','-NullRHI','-nosound','-nop4','-Marau6Integration',"-Marau6IntegrationRun=$runId",'"-ExecCmds=Automation RunTests EditorLifecycle.'+$testName+'"','"-TestExit=Automation Test Queue Empty"','"-AbsLog='+$log+'"')
+        if($Bots){$gameArgs+='-Marau6BotsTest'}
         $game=Start-Process -FilePath $EditorExe -ArgumentList $gameArgs -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/unreal-pie-console.log') -RedirectStandardError (Join-Path $root 'LocalSettings/unreal-pie-error.log')
         if(!$game.WaitForExit(180000)){Stop-Process -Id $game.Id;throw 'Timeout no teste PIE.'}
         $body=Get-Content -LiteralPath $log -Raw
-        if($body -notmatch 'Result=\{Success\} Name=\{BaseOnlineAndTeardown\}' -or $body -match 'Result=\{Fail\}'){throw "Falha no PIE. Consulte $log"}
+        if($body -notmatch ("Result=\{Success\} Name=\{"+$testName+"\}") -or $body -match 'Result=\{Fail\}'){throw "Falha no PIE. Consulte $log"}
         Write-Host 'PASS two real PIE clients: profiles, reserved equipment, replication and End Play'
+        if($Bots){
+            $report=Get-Content -LiteralPath (Join-Path $root 'LocalSettings/bots-test-result.json') -Raw | ConvertFrom-Json
+            if($report.run -ne $runId){throw 'Relatorio pertence a outra execucao.'}
+            Stop-Process -Id $server.Id;$server.WaitForExit()
+            $server=Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList @('"'+$dll+'"','--urls','http://127.0.0.1:5187') -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/bots-restart.log') -RedirectStandardError (Join-Path $root 'LocalSettings/bots-restart-error.log')
+            $ready=$false
+            for($n=0;$n -lt 50;$n++){try{Invoke-RestMethod 'http://127.0.0.1:5187/health' -Headers @{'X-Marau6-Key'=$settings.apiKey}|Out-Null;$ready=$true;break}catch{Start-Sleep -Milliseconds 200}}
+            if(!$ready){throw 'Backend de teste nao reiniciou.'}
+            $state=Invoke-RestMethod ('http://127.0.0.1:5187/state/'+$report.profile) -Headers @{'X-Marau6-Key'=$settings.apiKey}
+            if(@($state.items|Where-Object {$_.id -eq $report.item}).Count -ne 1){throw 'Loot de bot nao persistiu exatamente uma vez.'}
+            Write-Host 'PASS bot loot remains unique after backend process restart'
+        }
         return
     }
     foreach($phase in @('cycle','verify')){

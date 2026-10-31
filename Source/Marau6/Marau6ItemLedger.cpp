@@ -306,3 +306,18 @@ bool UMarau6ItemLedger::FinalizeDisconnected(FGuid Owner,FVector Location)
     if(AbandonReserved(Owner,Items,Location)){Owners.Remove(Owner);return true;}
     Records=Before;return false;
 }
+
+bool UMarau6ItemLedger::GrantWorld(FGuid Id,EMarau6ItemKind Kind,FVector Location)
+{
+    if(!IsServer() || !Id.IsValid() || Location.ContainsNaN() || static_cast<uint8>(Kind)>static_cast<uint8>(EMarau6ItemKind::Scrap))return false;
+    if(const auto* Existing=Records.Find(Id))return Existing->Item.Kind==Kind;
+    if(UMarau6Persistence::UsesPersistentBase(GetWorld()))
+    {auto* Bridge=GetWorld()->GetSubsystem<UMarau6Persistence>();if(!Bridge || !Bridge->CanMutate())return false;}
+    FMarau6ItemRecord Record;Record.Item.Id=Id;Record.Item.Kind=Kind;Record.Item.Slot=INDEX_NONE;
+    if(Record.Item.IsRifle()){Record.Item.Magazine=10;Record.Item.Reserve=30;}
+    Record.Custody=EMarau6Custody::Recovery;Record.RecoveryLocation=Location;
+    Records.Add(Id,Record);
+    // Durable before visible. Recovery and world actors have the same exported custody.
+    if(!Persist()){Records.Remove(Id);return false;}
+    SpawnWorld(Id,Location);return true;
+}

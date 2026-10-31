@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Marau6Character.h"
+#include "Marau6Bot.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerStart.h"
 #include "Marau6Persistence.h"
@@ -329,11 +330,12 @@ void AMarau6Character::ServerFire_Implementation()
     // intentionally gives uniform whole-body damage in this first prototype.
     const bool bBlockingHit = GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Pawn, Query);
     AMarau6Character* Target = bBlockingHit ? Cast<AMarau6Character>(Hit.GetActor()) : nullptr;
-    const bool bHitCharacter = Target && Target->CanParticipate();
+    AMarau6Bot* Bot = bBlockingHit ? Cast<AMarau6Bot>(Hit.GetActor()) : nullptr;
+    const bool bHitCharacter = (Target && Target->CanParticipate()) || (Bot && Bot->IsAlive());
     if (bHitCharacter)
     {
         FDamageEvent DamageEvent;
-        Target->TakeDamage(PrototypeDamage, DamageEvent, GetController(), this);
+        Hit.GetActor()->TakeDamage(PrototypeDamage, DamageEvent, GetController(), this);
     }
     MulticastShot(bBlockingHit ? Hit.ImpactPoint : End,
         bBlockingHit ? Hit.ImpactNormal : FVector::ZeroVector, bBlockingHit, bHitCharacter);
