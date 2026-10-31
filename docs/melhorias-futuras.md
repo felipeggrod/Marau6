@@ -16,3 +16,12 @@ Esta lista reúne pedidos do usuário, ideias, observações e bugs adiados. Reg
 ## Como manter esta lista
 
 Novas entradas devem ter identificador, origem (usuário ou assistente), tipo, descrição, estado e decisão pendente. Usar estados como sugerido, adiado, aprovado para planejamento, em implementação e concluído. Pedidos adiados não devem ser retomados automaticamente. Funcionalidades já previstas no projeto não precisam ser duplicadas aqui, salvo quando houver uma observação nova a registrar.
+
+## FUT-002 — Equipamento e comportamento avançado dos bots
+
+- **Origem:** sugestões do assistente no desenho aprovado do bloco de bots básicos, em30/10/2026.
+- **Tipo:** evolução candidata.
+- **Estado:** adiado no escopo aprovado; não implementar automaticamente.
+- **Descrição:** substituir o rifle apenas visual por equipamento individual saqueável, com munição, recarga e transferência de custódia. Avaliar inventário completo de cadáver, audição, cobertura e coordenação tática em blocos posteriores.
+- **Decisão pendente:** definir quais recursos entram primeiro e como equilibrar a oferta de equipamentos. A aprovação dos bots básicos não autoriza estas ampliações.
+- **Critérios sugeridos:** manter GUID e munição em transferências, uma concessão por morte, autoridade do servidor, reinício sem duplicações e custo de IA compatível com a quantidade de bots desejada.

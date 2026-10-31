@@ -96,3 +96,6 @@ Ideias, observações e bugs adiados estão registrados em [melhorias futuras](d
 ## Base e persistência
 
 Dois perfis locais, stash de32 slots, concessão inicial única e reserva do equipamento por partida. Teclas1/2 escolhem perfil; setas e Enter movem itens; B entra e N inicia nova rodada após ambos terminarem. Consulte [preparação, política de abandono e testes](docs/base-stash-persistencia.md). Este fluxo é local de desenvolvimento, sem login de produção.
+
+## Bots básicos
+Três bots por rodada, com patrulha, visão, combate no servidor e uma Peça por morte. Consulte [funcionamento e roteiro de teste](docs/bots-basicos.md).

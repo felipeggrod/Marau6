@@ -1,4 +1,5 @@
 #include "Marau6Persistence.h"
+#include "Marau6Bots.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
 #if PLATFORM_WINDOWS
@@ -165,7 +166,7 @@ void UMarau6Persistence::OpenRound()
     bOpening=true;bReady=false;Sequence=0;Entered.Empty();Submitted.Empty();Completed.Empty();
     RaidId=FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower);
     auto O=Operation();O->SetStringField(TEXT("raidId"),RaidId);
-    Queue(TEXT("/raids/open"),O,[this](const FString&){bOpening=false;bReady=true;CommitLedger();});
+    Queue(TEXT("/raids/open"),O,[this](const FString&){if(auto* Bots=GetWorld()->GetSubsystem<UMarau6Bots>())Bots->ResetForRound(RaidId);bOpening=false;bReady=true;CommitLedger();});
 }
 void UMarau6Persistence::Refresh(AMarau6PlayerController* PC)
 {

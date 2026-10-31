@@ -28,6 +28,7 @@ public:
     bool IsFinalized(FGuid Owner) const { return Finalized.Contains(Owner); }
     bool IsExtracted(FGuid Owner) const { return ExtractedOwners.Contains(Owner); }
     void ResetRound();
+    bool GrantWorld(FGuid Id,EMarau6ItemKind Kind,FVector Location);
     FGuid RegisterInventory(UMarau6InventoryComponent* Component);
     void RegisterSeed(AMarau6LootActor* Actor, EMarau6ItemKind Kind);
     bool Pickup(UMarau6InventoryComponent* Component, AMarau6LootActor* Actor, FGuid Expected);
