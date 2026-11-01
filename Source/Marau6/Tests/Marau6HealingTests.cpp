@@ -114,14 +114,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6WearJournalTest,"Marau6.Combat.WearJourn
 bool FMarau6WearJournalTest::RunTest(const FString&)
 {
     FHealingWorld F(true);auto* Bridge=F.W->GetSubsystem<UMarau6Persistence>();Bridge->bEnabled=true;Bridge->bReady=true;Bridge->bSending=true;
-    FMarau6Item Rifle;Rifle.Id=FGuid::NewGuid();Rifle.Kind=EMarau6ItemKind::Rifle;Rifle.Slot=10;Rifle.Magazine=10;Rifle.Reserve=40;Rifle.Durability=250;
+    FMarau6Item Rifle;Rifle.Id=FGuid::NewGuid();Rifle.Kind=EMarau6ItemKind::Rifle;Rifle.Slot=10;Rifle.Magazine=10;Rifle.Reserve=40;Rifle.Durability=100;
     TestTrue(TEXT("Import rifle with one remaining shot of condition"),F.L->Import(F.P->GetInventory(),FGuid::NewGuid(),{Rifle}));
     const FString Root=FPaths::ProjectSavedDir()/TEXT("Automation/Wear");IFileManager::Get().MakeDirectory(*Root,true);const FString Blocker=Root/TEXT("blocked-parent");FFileHelper::SaveStringToFile(TEXT("file"),*Blocker);
     Bridge->JournalPath=Blocker/TEXT("journal.json");Bridge->RaidId=FGuid::NewGuid().ToString();
     auto* Target=F.W->SpawnActor<AMarau6Character>(F.P->GetClass(),FVector(500,0,96),FRotator::ZeroRotator);F.P->GetController()->SetControlRotation(FRotator::ZeroRotator);
     AddExpectedError(TEXT("Falha ao gravar diario"),EAutomationExpectedErrorFlags::Contains,1);
     F.P->ProcessEvent(F.P->FindFunction(TEXT("ServerFire")),nullptr);
-    TestEqual(TEXT("Failed journal keeps exact condition"),F.P->GetRifleDurability(),250);TestEqual(TEXT("Failed journal keeps item ammo"),F.P->GetInventory()->ItemAt(10)->Magazine,10);
+    TestEqual(TEXT("Failed journal keeps exact condition"),F.P->GetRifleDurability(),100);TestEqual(TEXT("Failed journal keeps item ammo"),F.P->GetInventory()->ItemAt(10)->Magazine,10);
     TestEqual(TEXT("Failed journal keeps replicated ammo"),F.P->GetMagazineAmmo(),10);TestEqual(TEXT("Unpaid shot causes no damage"),Target->GetHealth(),100.f);
     Bridge->bFatal=false;Bridge->bReady=true;Bridge->JournalPath=Root/TEXT("journal.json");
     F.P->ProcessEvent(F.P->FindFunction(TEXT("ServerFire")),nullptr);
@@ -129,5 +129,22 @@ bool FMarau6WearJournalTest::RunTest(const FString&)
     F.Advance(.3f);F.P->ProcessEvent(F.P->FindFunction(TEXT("ServerFire")),nullptr);TestEqual(TEXT("Zero blocks further damage"),Target->GetHealth(),75.f);
     FString Journal;FFileHelper::LoadFileToString(Journal,*Bridge->JournalPath);TestTrue(TEXT("Durability zero present in durable command"),Journal.Contains(TEXT("durability")));
     return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6AmmoRollbackTest,"Marau6.Inventory.AmmoRollback",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FMarau6AmmoRollbackTest::RunTest(const FString&)
+{
+    FHealingWorld F(true);auto* B=F.W->GetSubsystem<UMarau6Persistence>();B->bEnabled=true;B->bReady=true;B->bSending=true;
+    FMarau6Item Rifle;Rifle.Id=FGuid::NewGuid();Rifle.Kind=EMarau6ItemKind::Rifle;Rifle.Slot=10;Rifle.Magazine=20;Rifle.Reserve=40;
+    FMarau6Item Ammo;Ammo.Id=FGuid::NewGuid();Ammo.Kind=EMarau6ItemKind::Ammo;Ammo.Slot=0;
+    TestTrue(TEXT("Import ammo rollback fixture"),F.L->Import(F.P->GetInventory(),FGuid::NewGuid(),{Rifle,Ammo}));
+    const FString Root=FPaths::ProjectSavedDir()/TEXT("Automation/Ammo");IFileManager::Get().MakeDirectory(*Root,true);const FString Blocker=Root/TEXT("blocked-parent");FFileHelper::SaveStringToFile(TEXT("file"),*Blocker);
+    B->JournalPath=Blocker/TEXT("journal.json");B->RaidId=FGuid::NewGuid().ToString();
+    AddExpectedError(TEXT("Falha ao gravar diario"),EAutomationExpectedErrorFlags::Contains,1);
+    TestFalse(TEXT("Failed journal refuses ammo transfer"),F.L->Move(F.P->GetInventory(),Ammo.Id,10));
+    TestEqual(TEXT("Failed journal preserves reserve"),F.P->GetReserveAmmo(),40);TestEqual(TEXT("Failed journal preserves custody"),F.Custody(Ammo.Id),FString(TEXT("inventory")));
+    TestTrue(TEXT("Failed journal preserves exact source"),F.P->GetInventory()->ItemAt(0) && F.P->GetInventory()->ItemAt(0)->Id==Ammo.Id);
+    B->bFatal=false;B->bReady=true;B->JournalPath=Root/TEXT("journal.json");
+    TestTrue(TEXT("Retry pays for reserve once"),F.L->Move(F.P->GetInventory(),Ammo.Id,10));TestEqual(TEXT("HUD reflects committed reserve"),F.P->GetReserveAmmo(),60);
+    TestFalse(TEXT("Replay cannot spend consumed GUID"),F.L->Move(F.P->GetInventory(),Ammo.Id,10));return true;
 }
 #endif

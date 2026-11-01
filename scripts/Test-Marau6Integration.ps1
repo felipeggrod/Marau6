@@ -47,7 +47,7 @@ try {
             if(!$ready){throw 'Backend de testes nao reiniciou.'}
             $profile=Invoke-RestMethod 'http://127.0.0.1:5187/state/1' -Headers @{'X-Marau6-Key'=$settings.apiKey}
             $rifles=@($profile.items|Where-Object {$_.id -eq $report.item})
-            if($rifles.Count -ne 1 -or $rifles[0].durability -ne 10000 -or $rifles[0].magazine -ne 10 -or $rifles[0].reserve -ne 40){throw 'A interface mudou identidade, condicao ou municao.'}
+            if($rifles.Count -ne 1 -or $rifles[0].durability -ne 9600 -or $rifles[0].magazine -ne 16 -or $rifles[0].reserve -ne 60){throw 'A interface mudou identidade, condicao ou municao.'}
             Write-Host 'PASS inventory UI: base and raid transfers, stale/rejected requests, two raids and backend restart'
         }
         if($Wear){
@@ -60,7 +60,7 @@ try {
             if(!$ready){throw 'Backend de testes nao reiniciou.'}
             $profile=Invoke-RestMethod 'http://127.0.0.1:5187/state/2' -Headers @{'X-Marau6-Key'=$settings.apiKey}
             $rifles=@($profile.items|Where-Object {$_.id -eq $report.item})
-            if($rifles.Count -ne 1 -or $null -eq $rifles[0].durability -or $rifles[0].durability -ne 0 -or $rifles[0].magazine -ne 10){throw 'Rifle perdeu durabilidade, identidade ou municao apos reinicio.'}
+            if($rifles.Count -ne 1 -or $null -eq $rifles[0].durability -or $rifles[0].durability -ne 0 -or $rifles[0].magazine -ne 20){throw 'Rifle perdeu durabilidade, identidade ou municao apos reinicio.'}
             Write-Host 'PASS zero condition and remaining ammo survive transfer, two raids and backend restart'
         }
         if($Healing){

@@ -12,6 +12,7 @@ public:
     TWeakObjectPtr<AMarau6PlayerController> Controller;
     FMarau6InventoryUIRequest Request;
     FString Label;
+    int32 IconKind=-1;
     static TSharedRef<FMarau6InventoryDragOperation> New(AMarau6PlayerController* PC,const FMarau6InventoryUIRequest& R);
     virtual TSharedPtr<SWidget> GetDefaultDecorator() const override;
     virtual void OnDrop(bool Handled,const FPointerEvent& Event) override;

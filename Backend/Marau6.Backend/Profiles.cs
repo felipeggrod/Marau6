@@ -8,7 +8,7 @@ public static class Profiles
         var p = s.Profiles.SingleOrDefault(x => x.Number == number);
         if (p != null) return p;
         p = new Profile { Id = Guid.Parse(number == 1 ? "11111111-1111-1111-1111-111111111111" : "22222222-2222-2222-2222-222222222222"), Number = number };
-        for (int n = 0; n < 5; n++) p.Items.Add(new Item { Id = Guid.NewGuid(), Kind = n == 0 ? 0 : n < 3 ? 1 : 2, Slot = n == 0 ? 10 : 99 + n, Magazine = n == 0 ? 10 : 0, Reserve = n == 0 ? 40 : 0, Durability = n == 0 ? 10000 : null, Owner = p.Id.ToString() });
+        for (int n = 0; n < 5; n++) p.Items.Add(new Item { Id = Guid.NewGuid(), Kind = n == 0 ? 0 : n < 3 ? 1 : 2, Slot = n == 0 ? 10 : 99 + n, Magazine = n == 0 ? 20 : 0, Reserve = n == 0 ? 40 : 0, Durability = n == 0 ? 10000 : null, Owner = p.Id.ToString() });
         s.Profiles.Add(p); return p;
     }
 }

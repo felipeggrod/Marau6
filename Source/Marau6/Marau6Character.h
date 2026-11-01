@@ -41,7 +41,7 @@ struct FMarau6AmmoState
     GENERATED_BODY()
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
-    int32 Magazine = 10;
+    int32 Magazine = 20;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
     int32 Reserve = 40;
@@ -59,6 +59,7 @@ class AMarau6Character : public ACharacter
 	GENERATED_BODY()
     friend class FMarau6InventoryReorderTest;
     friend class FMarau6UIInputTest;
+    friend class FMarau6AutomaticTest;
 
 	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
@@ -109,6 +110,10 @@ protected:
     TObjectPtr<UInputMappingContext> PrototypeFireMapping;
 
     void DoFire();
+    void StartAutomaticFire();
+    void StopAutomaticFire();
+    bool bFireNeedsRelease=false;
+    double NextLocalFireTime=-1;
     void DoReload();
 
     UFUNCTION(Server, Reliable)
@@ -153,7 +158,7 @@ protected:
     /** Server-owned cooldown, never accepted from a client. */
     double LastServerFireTime = -1.0;
 
-    static constexpr int32 PrototypeMagazineCapacity = 10;
+    static constexpr int32 PrototypeMagazineCapacity = 20;
     static constexpr float PrototypeReloadDuration = 2.0f;
 
     static constexpr float PrototypeDamage = 25.0f;
@@ -193,8 +198,9 @@ public:
     void RequestInventoryMove(FGuid Id,int32 Destination);
     FGuid GetInventoryMoveSource() const { return InventoryMoveSource; }
     int32 GetSelectedInventorySlot() const { return SelectedInventorySlot; }
-    void OpenInventoryResult() { bInventoryOpen=true; }
+    void OpenInventoryResult() { bInventoryOpen=true;bFireNeedsRelease=true; }
     void OnInventoryChanged(bool bEquipmentChanged);
+    void RefreshEquippedAmmo();
     EMarau6RaidState GetRaidState() const { return RaidStatus.State; }
     bool CanParticipate() const;
     bool SetAtBase(bool bValue);

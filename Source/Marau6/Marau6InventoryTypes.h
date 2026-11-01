@@ -2,7 +2,7 @@
 #include "CoreMinimal.h"
 #include "Marau6InventoryTypes.generated.h"
 UENUM()
-enum class EMarau6ItemKind : uint8 { Rifle, Supply, Scrap };
+enum class EMarau6ItemKind : uint8 { Rifle, Supply, Scrap, Ammo };
 USTRUCT()
 struct FMarau6Item
 {
@@ -12,10 +12,11 @@ struct FMarau6Item
     UPROPERTY() int32 Slot = INDEX_NONE;
     UPROPERTY() int32 Magazine = 0;
     UPROPERTY() int32 Reserve = 0;
-    // Fixed-point: 10000 = 100%, one accepted shot costs 250 = 2.5 points.
+    // Fixed-point: 10000 = 100%, one accepted shot costs 100 = 1 point.
     UPROPERTY() int32 Durability = 10000;
     bool IsRifle() const { return Kind == EMarau6ItemKind::Rifle; }
-    FString Name() const { return IsRifle() ? TEXT("Rifle") : Kind == EMarau6ItemKind::Supply ? TEXT("Suprimentos") : TEXT("Pecas"); }
+    bool IsAmmo() const { return Kind == EMarau6ItemKind::Ammo; }
+    FString Name() const { return IsRifle() ? TEXT("Rifle") : Kind == EMarau6ItemKind::Supply ? TEXT("Suprimentos") : IsAmmo() ? TEXT("Municao") : TEXT("Pecas"); }
 };
 USTRUCT()
 struct FMarau6InventorySnapshot
@@ -34,4 +35,9 @@ namespace Marau6Slots
     {
         return Slot>=0 && Slot<Total && (Slot==Weapon ? Item.IsRifle() : !IsSafe(Slot) || !Item.IsRifle());
     }
+}
+
+namespace Marau6Ammo
+{
+    constexpr int32 Magazine=20, InitialReserve=40, MaximumReserve=120, BoxRounds=20, ShotWear=100;
 }

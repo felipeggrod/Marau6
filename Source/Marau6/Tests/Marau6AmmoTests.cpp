@@ -65,27 +65,27 @@ bool FMarau6AmmoTest::RunTest(const FString& Parameters)
     auto StartReload = [&]() { Shooter->ProcessEvent(Reload, nullptr); };
     auto Empty = [&](int32 Rounds) { for (int32 I=0; I<Rounds; ++I) { Shoot(); Advance(0.3f); } };
     Advance(0.f);
-    TestEqual(TEXT("Initial magazine"), Mag(), 10);
+    TestEqual(TEXT("Initial magazine"), Mag(), 20);
     TestEqual(TEXT("Initial reserve"), Res(), 40);
     StartReload();
     TestFalse(TEXT("Full magazine ignores reload"), Busy());
     Shoot();
-    TestEqual(TEXT("Accepted miss spends one round"), Mag(), 9);
+    TestEqual(TEXT("Accepted miss spends one round"), Mag(), 19);
     Shoot();
-    TestEqual(TEXT("Rate-limited request spends nothing"), Mag(), 9);
+    TestEqual(TEXT("Rate-limited request spends nothing"), Mag(), 19);
     StartReload();
     TestTrue(TEXT("Reload starts"), Busy());
     Shoot();
-    TestEqual(TEXT("Cannot fire while reloading"), Mag(), 9);
+    TestEqual(TEXT("Cannot fire while reloading"), Mag(), 19);
     Advance(1.f);
     TestTrue(TEXT("Reload still in progress after one second"), Busy());
     TestEqual(TEXT("No early transfer"), Res(), 40);
     StartReload();
     Advance(1.05f);
     TestFalse(TEXT("Repeated request does not restart reload"), Busy());
-    TestEqual(TEXT("Partial reload fills only one round"), Mag(), 10);
+    TestEqual(TEXT("Partial reload fills only one round"), Mag(), 20);
     TestEqual(TEXT("Partial reload consumes only one reserve round"), Res(), 39);
-    Empty(10);
+    Empty(20);
     TestEqual(TEXT("Magazine empty after ten shots"), Mag(), 0);
     AMarau6Character* Target = MakeCharacter(FVector(500, 0, 200));
     if (!TestNotNull(TEXT("Target"), Target)) return false;
@@ -96,17 +96,13 @@ bool FMarau6AmmoTest::RunTest(const FString& Parameters)
     Shoot();
     TestEqual(TEXT("Reloading gun does no damage"), Target->GetHealth(), 100.f);
     Advance(2.05f);
-    TestEqual(TEXT("Empty reload fills ten"), Mag(), 10);
-    TestEqual(TEXT("Reserve reduced by ten"), Res(), 29);
-    Controller->SetControlRotation(FRotator(0, 90, 0));
-    Empty(10); StartReload(); Advance(2.05f);
-    TestEqual(TEXT("Next full reload reserve"), Res(), 19);
-    Empty(10); StartReload(); Advance(2.05f);
-    TestEqual(TEXT("Fourth full magazine"), Mag(), 10);
-    TestEqual(TEXT("Ten extra rounds include loaded magazine"), Res(), 9);
-    Empty(9); StartReload(); Advance(2.05f);
-    TestEqual(TEXT("Remaining ammunition stays available after weapon reaches zero"), Mag(), 10);
-    TestFalse(TEXT("Cannot reload without reserve"), Busy());
+    TestEqual(TEXT("Empty reload fills ten"), Mag(), 20);
+    TestEqual(TEXT("Reserve reduced by ten"), Res(), 19);
+    Controller->SetControlRotation(FRotator(0,90,0));
+    Empty(20);StartReload();Advance(2.05f);
+    TestEqual(TEXT("Final partial reload transfers remaining19"),Mag(),19);
+    TestEqual(TEXT("Reserve exhausted"),Res(),0);
+    Empty(19);StartReload();TestFalse(TEXT("Cannot reload without reserve"),Busy());
 
     // Fresh actor proves death cancels a genuinely active reload with reserve available.
     AMarau6Character* Dying = MakeCharacter(FVector(0, 1000, 200));
@@ -121,7 +117,7 @@ bool FMarau6AmmoTest::RunTest(const FString& Parameters)
     Dying->TakeDamage(100.f, Damage, nullptr, nullptr);
     Advance(2.1f);
     TestFalse(TEXT("Death clears reload state"), Reloading->GetPropertyValue_InContainer(DyingState));
-    TestEqual(TEXT("Death prevents ammo transfer"), Magazine->GetPropertyValue_InContainer(DyingState), 9);
+    TestEqual(TEXT("Death prevents ammo transfer"), Magazine->GetPropertyValue_InContainer(DyingState), 19);
     TestEqual(TEXT("Death preserves reserve"), Reserve->GetPropertyValue_InContainer(DyingState), 40);
     Dying->ProcessEvent(Reload, nullptr);
     TestFalse(TEXT("Dead character cannot start reload"), Reloading->GetPropertyValue_InContainer(DyingState));
@@ -147,21 +143,21 @@ bool FMarau6WearTest::RunTest(const FString&)
     auto Condition=[&](){return Field->GetPropertyValue_InContainer(I->ItemAt(10));};
     TestEqual(TEXT("Rifle starts full"),Condition(),10000);TestEqual(TEXT("Test reserve"),P->GetReserveAmmo(),40);
     FGuid Rifle;
-    FMarau6Item Spare;Spare.Id=FGuid::NewGuid();Spare.Kind=EMarau6ItemKind::Rifle;Spare.Slot=0;Spare.Magazine=10;Spare.Reserve=40;
-    FMarau6Item Equipped=*I->ItemAt(10);Equipped.Id=FGuid::NewGuid();Rifle=Equipped.Id;
+    FMarau6Item Spare;Spare.Id=FGuid::NewGuid();Spare.Kind=EMarau6ItemKind::Rifle;Spare.Slot=0;Spare.Magazine=20;Spare.Reserve=40;
+    FMarau6Item Equipped=*I->ItemAt(10);Equipped.Id=FGuid::NewGuid();Equipped.Reserve=120;Rifle=Equipped.Id;
     if(!TestTrue(TEXT("Import two independent rifles"),L->Import(I,FGuid::NewGuid(),{Equipped,Spare})))return false;
-    for(int n=0;n<40;n++)
+    for(int n=0;n<100;n++)
     {
-        if(n>0 && n%10==0){Reload();Fire();TestEqual(TEXT("Reload rejects shot without wear"),Condition(),10000-n*250);Advance(2.1f);}
-        Advance(.3f);Fire();TestEqual(TEXT("One accepted shot loses exactly 2.5 points"),Condition(),10000-(n+1)*250);
+        if(n>0 && n%20==0){Reload();Fire();TestEqual(TEXT("Reload rejects shot without wear"),Condition(),10000-n*100);Advance(2.1f);}
+        Advance(.3f);Fire();TestEqual(TEXT("One accepted shot loses exactly1 point"),Condition(),10000-(n+1)*100);
         TestEqual(TEXT("AmmoState agrees with authoritative item"),P->GetMagazineAmmo(),I->ItemAt(10)->Magazine);
-        Fire();TestEqual(TEXT("Repeated rate-limited/empty shot has no wear"),Condition(),10000-(n+1)*250);
+        Fire();TestEqual(TEXT("Repeated rate-limited/empty shot has no wear"),Condition(),10000-(n+1)*100);
     }
-    TestEqual(TEXT("Exactly40 shots empty fourth magazine"),P->GetMagazineAmmo(),0);TestEqual(TEXT("Ten extra rounds remain"),P->GetReserveAmmo(),10);
+    TestEqual(TEXT("Exactly100 shots empty fifth magazine"),P->GetMagazineAmmo(),0);TestEqual(TEXT("Forty extra rounds remain"),P->GetReserveAmmo(),40);
     TestEqual(TEXT("Other rifle remains full"),Field->GetPropertyValue_InContainer(I->ItemAt(0)),10000);
-    Reload();Advance(2.1f);TestEqual(TEXT("Reload preserves zero condition"),Condition(),0);TestEqual(TEXT("Ammo available to prove durability blocks fire"),P->GetMagazineAmmo(),10);
+    Reload();Advance(2.1f);TestEqual(TEXT("Reload preserves zero condition"),Condition(),0);TestEqual(TEXT("Ammo available to prove durability blocks fire"),P->GetMagazineAmmo(),20);
     auto* Target=W->SpawnActor<AMarau6Character>(Class,FVector(500,0,200),FRotator::ZeroRotator,Spawn);PC->SetControlRotation(FRotator::ZeroRotator);
-    Fire();TestEqual(TEXT("Broken rifle spends no ammo"),P->GetMagazineAmmo(),10);TestEqual(TEXT("Broken rifle does no damage"),Target->GetHealth(),100.f);
+    Fire();TestEqual(TEXT("Broken rifle spends no ammo"),P->GetMagazineAmmo(),20);TestEqual(TEXT("Broken rifle does no damage"),Target->GetHealth(),100.f);
     TestTrue(TEXT("Swap zero rifle with spare"),L->Move(I,Rifle,0));TestEqual(TEXT("Spare equipped full"),Condition(),10000);
     TestEqual(TEXT("Zero preserved in bag"),Field->GetPropertyValue_InContainer(I->ItemAt(0)),0);
     TestTrue(TEXT("Reequip zero rifle"),L->Move(I,Rifle,10));TestEqual(TEXT("Reequip cannot repair"),Condition(),0);

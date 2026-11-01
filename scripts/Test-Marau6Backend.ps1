@@ -13,6 +13,7 @@ $testBuild = Join-Path $root 'LocalSettings/test-build'
 if ($LASTEXITCODE -ne 0) { throw 'Build falhou.' }
 $dll = Join-Path $testBuild 'Marau6.Backend.dll'
 $p = Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList @('"' + $dll + '"', '--urls', 'http://127.0.0.1:5187') -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/test-backend.log') -RedirectStandardError (Join-Path $root 'LocalSettings/test-backend-error.log')
+$env:MARAU6_AMMO_REPORT=Join-Path $root 'LocalSettings/ammo-contract.json'
 $env:MARAU6_WEAR_REPORT=Join-Path $root 'LocalSettings/wear-contract.json'
 $env:MARAU6_HEALING_REPORT=Join-Path $root 'LocalSettings/healing-contract.json'
 $env:MARAU6_REPLAY_FILE=Join-Path $root 'LocalSettings/replay-test.json'
@@ -49,6 +50,12 @@ try {
     $profile=Invoke-RestMethod ('http://127.0.0.1:5187/state/'+$heal.profile) -Headers @{'X-Marau6-Key'=$settings.apiKey}
     if(@($raid.items|Where-Object {$_.id -eq $heal.item -and $_.custody -eq 'consumed'}).Count -ne 1 -or @($profile.items|Where-Object {$_.id -eq $heal.item}).Count -ne 0){throw 'Consumo nao sobreviveu ao reinicio.'}
     Write-Host 'PASS consumed supply remains absent after backend process restart'
+    $ammo=Get-Content -LiteralPath $env:MARAU6_AMMO_REPORT -Raw|ConvertFrom-Json
+    $replayed=Invoke-RestMethod 'http://127.0.0.1:5187/move' -Method Post -Headers @{'X-Marau6-Key'=$settings.apiKey} -ContentType 'application/json' -Body ($ammo.body|ConvertTo-Json -Depth 20)
+    $after=Invoke-RestMethod ('http://127.0.0.1:5187/state/'+$ammo.profile) -Headers @{'X-Marau6-Key'=$settings.apiKey}
+    if($replayed.revision -ne $ammo.response.revision -or @($after.items|Where-Object {$_.id -eq $ammo.consumed}).Count -ne 0 -or @($after.items|Where-Object {$_.id -eq $ammo.rifle -and $_.reserve -eq 80}).Count -ne 1){throw 'Ammunition transaction changed after restart.'}
+    Write-Host 'PASS ammunition reserve, consumed identity and receipt survive backend restart'
+
 } finally {
     if (!$p.HasExited) { Stop-Process -Id $p.Id }
     Remove-Item Env:MARAU6_DB -ErrorAction SilentlyContinue
