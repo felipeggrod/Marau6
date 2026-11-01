@@ -44,14 +44,14 @@ FGuid UMarau6ItemLedger::RegisterInventory(UMarau6InventoryComponent* C)
     if(!IsServer() || !IsValid(C)) return FGuid();
     const FGuid Owner=FGuid::NewGuid(); Owners.Add(Owner,C);
     FMarau6ItemRecord R; R.Item.Id=FGuid::NewGuid(); R.Item.Kind=EMarau6ItemKind::Rifle;
-    R.Item.Slot=Marau6Slots::Weapon; R.Item.Magazine=10; R.Item.Reserve=30; R.OwnerId=Owner;
+    R.Item.Slot=Marau6Slots::Weapon; R.Item.Magazine=10; R.Item.Reserve=40; R.OwnerId=Owner;
     Records.Add(R.Item.Id,R); return Owner;
 }
 void UMarau6ItemLedger::RegisterSeed(AMarau6LootActor* Actor,EMarau6ItemKind Kind)
 {
     if(!IsServer() || !IsValid(Actor) || Actor->GetItem().Id.IsValid()) return;
     FMarau6ItemRecord R; R.Item.Id=FGuid::NewGuid(); R.Item.Kind=Kind;
-    if(R.Item.IsRifle()){R.Item.Magazine=10;R.Item.Reserve=30;}
+    if(R.Item.IsRifle()){R.Item.Magazine=10;R.Item.Reserve=40;}
     R.Custody=EMarau6Custody::World; R.Loot=Actor; Records.Add(R.Item.Id,R); Actor->SetItem(R.Item);
 }
 bool UMarau6ItemLedger::Pickup(UMarau6InventoryComponent* C,AMarau6LootActor* Actor,FGuid Expected)
@@ -147,13 +147,23 @@ bool UMarau6ItemLedger::Drop(UMarau6InventoryComponent* C,FGuid Expected)
     {if(auto* Created=Records.Find(Expected);Created && Created->Loot.IsValid())Created->Loot->Consume();Records=Before;bTransferred=false;}
     Sync(Owner);return bTransferred;
 }
+bool UMarau6ItemLedger::SaveShot(UMarau6InventoryComponent* C)
+{
+    if(!Usable(C))return false;
+    auto* R=At(C->GetSessionInventoryId(),Marau6Slots::Weapon);
+    if(!R || R->Custody!=EMarau6Custody::Inventory || !R->Item.IsRifle() || R->Item.Durability<=0 || R->Item.Magazine<=0)return false;
+    const FMarau6Item Before=R->Item;
+    --R->Item.Magazine;R->Item.Durability=FMath::Max(0,R->Item.Durability-250);
+    if(!Persist()){R->Item=Before;return false;}
+    Sync(C->GetSessionInventoryId());return true;
+}
 bool UMarau6ItemLedger::SaveAmmo(UMarau6InventoryComponent* C,int32 Magazine,int32 Reserve)
 {
     if(!Usable(C)) return false;
     if(auto* R=At(C->GetSessionInventoryId(),Marau6Slots::Weapon))
     {
         const auto Before=R->Item;
-        R->Item.Magazine=FMath::Clamp(Magazine,0,10);R->Item.Reserve=FMath::Clamp(Reserve,0,30);
+        R->Item.Magazine=FMath::Clamp(Magazine,0,10);R->Item.Reserve=FMath::Clamp(Reserve,0,40);
         if(!Persist()){R->Item=Before;return false;}
         Sync(C->GetSessionInventoryId());return true;
     }
@@ -242,7 +252,7 @@ bool UMarau6ItemLedger::Import(UMarau6InventoryComponent* C,FGuid Owner,const TA
     if(!IsServer() || !IsValid(C) || !Owner.IsValid()) return false;
     TSet<FGuid> Ids;TSet<int32> Slots;
     for(const auto& I:Items)
-    {if(!I.Id.IsValid() || Ids.Contains(I.Id) || Slots.Contains(I.Slot) || !Marau6Slots::Accepts(I.Slot,I) || Records.Contains(I.Id))return false;Ids.Add(I.Id);Slots.Add(I.Slot);}
+    {if(!I.Id.IsValid() || Ids.Contains(I.Id) || Slots.Contains(I.Slot) || !Marau6Slots::Accepts(I.Slot,I) || (I.IsRifle() && (I.Durability<0 || I.Durability>10000)) || Records.Contains(I.Id))return false;Ids.Add(I.Id);Slots.Add(I.Slot);}
     const FGuid Previous=C->InventoryId;
     TArray<FGuid> Old;for(const auto& Pair:Records)if(Pair.Value.OwnerId==Previous && Pair.Value.Custody==EMarau6Custody::Inventory)Old.Add(Pair.Key);
     for(FGuid Id:Old)Records.Remove(Id);Owners.Remove(Previous);
@@ -261,6 +271,7 @@ TArray<TSharedPtr<FJsonValue>> UMarau6ItemLedger::Export() const
         O->SetStringField(TEXT("id"),R.Item.Id.ToString(EGuidFormats::DigitsWithHyphensLower));
         O->SetNumberField(TEXT("kind"),static_cast<int32>(R.Item.Kind));O->SetNumberField(TEXT("slot"),bOwned?R.Item.Slot:-1);
         O->SetNumberField(TEXT("magazine"),R.Item.Magazine);O->SetNumberField(TEXT("reserve"),R.Item.Reserve);
+        if(R.Item.IsRifle())O->SetNumberField(TEXT("durability"),R.Item.Durability);
         O->SetStringField(TEXT("owner"),bOwned?R.OwnerId.ToString(EGuidFormats::DigitsWithHyphensLower):TEXT(""));
         O->SetStringField(TEXT("custody"),R.Custody==EMarau6Custody::Consumed?TEXT("consumed"):R.Custody==EMarau6Custody::Result?TEXT("result"):bOwned?TEXT("inventory"):TEXT("world"));
         Out.Add(MakeShared<FJsonValueObject>(O));
@@ -314,7 +325,7 @@ bool UMarau6ItemLedger::GrantWorld(FGuid Id,EMarau6ItemKind Kind,FVector Locatio
     if(UMarau6Persistence::UsesPersistentBase(GetWorld()))
     {auto* Bridge=GetWorld()->GetSubsystem<UMarau6Persistence>();if(!Bridge || !Bridge->CanMutate())return false;}
     FMarau6ItemRecord Record;Record.Item.Id=Id;Record.Item.Kind=Kind;Record.Item.Slot=INDEX_NONE;
-    if(Record.Item.IsRifle()){Record.Item.Magazine=10;Record.Item.Reserve=30;}
+    if(Record.Item.IsRifle()){Record.Item.Magazine=10;Record.Item.Reserve=40;}
     Record.Custody=EMarau6Custody::Recovery;Record.RecoveryLocation=Location;
     Records.Add(Id,Record);
     // Durable before visible. Recovery and world actors have the same exported custody.

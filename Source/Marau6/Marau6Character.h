@@ -44,7 +44,7 @@ struct FMarau6AmmoState
     int32 Magazine = 10;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
-    int32 Reserve = 30;
+    int32 Reserve = 40;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat")
     bool bReloading = false;
@@ -181,6 +181,7 @@ public:
     UMarau6InventoryComponent* GetInventory() const { return Inventory; }
     UMarau6HealingComponent* GetHealing() const { return Healing; }
     bool HasEquippedRifle() const;
+    int32 GetRifleDurability() const;
     bool IsInventoryOpen() const { return bInventoryOpen; }
     void ConfirmInventoryMove();
     FGuid GetInventoryMoveSource() const { return InventoryMoveSource; }

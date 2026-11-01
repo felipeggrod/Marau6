@@ -1,4 +1,8 @@
 using System.Net;
+using System.Text.Json;
+using System.Security.Cryptography;
+using Npgsql;
+using Marau6;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
 
@@ -18,10 +22,25 @@ async Task<JsonObject> Post(string path, object body, HttpStatusCode expected = 
 string Id(JsonNode n) => n["id"]!.GetValue<string>();
 int Rev(JsonObject n) => n["revision"]!.GetValue<int>();
 JsonArray Items(JsonObject n) => n["items"]!.AsArray();
+// A receipt produced by the PRE-durability wire format, not the current Item serializer.
+var legacyBody=new {operationId=Guid.NewGuid(),raidId=Guid.NewGuid(),sequence=1L,items=new[]{new{id=Guid.NewGuid(),kind=0,slot=-1,magazine=10,reserve=30,owner="",custody="world"}},results=Array.Empty<object>()};
+var legacyJson=JsonSerializer.Serialize(legacyBody,Store.Json);
+var oldHash=Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new{action="snapshot",data=legacyBody},Store.Json)));
+var parsedLegacy=JsonSerializer.Deserialize<SnapshotCommand>(legacyJson,Store.Json)!;
+Check(oldHash==Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new{action="snapshot",data=parsedLegacy},Store.Json))),"old snapshot byte hash remains identical");
+var isolated=Environment.GetEnvironmentVariable("MARAU6_DB")!;
+if(!isolated.Contains("Search Path=test_"))throw new Exception("Legacy fixture requires isolated test schema");
+await using(var connection=new NpgsqlConnection(isolated))
+{
+    await connection.OpenAsync();await using var seed=new NpgsqlCommand("INSERT INTO marau6_receipts VALUES($1,$2,$3::jsonb)",connection);
+    seed.Parameters.AddWithValue(legacyBody.operationId);seed.Parameters.AddWithValue(oldHash);seed.Parameters.AddWithValue("{\"sequence\":123}");await seed.ExecuteNonQueryAsync();
+}
+var legacyReceipt=await Post("/raids/snapshot",legacyBody);Check(legacyReceipt["sequence"]!.GetValue<int>()==123,"actual legacy receipt replay accepted without running unknown raid");
 var a = await Get(1); var b = await Get(2);
 Check(Items(a).Count == 5, "initial grant once");
 Check(Items(await Get(1)).Count == 5, "read does not grant again");
 var rifle = Items(a).First(x => x!["slot"]!.GetValue<int>() == 10)!;
+Check(rifle["durability"]?.GetValue<int>() == 10000 && rifle["reserve"]!.GetValue<int>() == 40, "new rifle full condition and 10/40");
 var op = Guid.NewGuid();
 var move = new { operationId = op, profile = 1, revision = Rev(a), item = Id(rifle), destination = 105 };
 a = await Post("/move", move);
@@ -48,7 +67,7 @@ var ownerB = b["id"]!.GetValue<string>();
 foreach (var n in worldItems)
 {
     var item = n!;
-    if (Id(item) == Id(rifle)) { item["owner"] = ownerB; item["slot"] = 0; item["magazine"] = 7; item["custody"] = "result"; }
+    if (Id(item) == Id(rifle)) { item["owner"] = ownerB; item["slot"] = 0; item["magazine"] = 7; item["durability"] = 2500; item["custody"] = "result"; }
     else if (item["owner"]!.GetValue<string>() == ownerA)
     { item["owner"] = ""; item["slot"] = -1; item["custody"] = "world"; }
     else item["custody"] = "result";
@@ -60,6 +79,7 @@ await Post("/raids/snapshot", snap);
 b = await Get(2);
 Check(Items(b).Count(x => Id(x!) == Id(rifle)) == 1, "new owner extracts exactly one transferred rifle");
 Check(Items(b).First(x => Id(x!) == Id(rifle))!["magazine"]!.GetValue<int>() == 7, "ammo preserved");
+Check(Items(b).First(x=>Id(x!)==Id(rifle))!["durability"]!.GetValue<int>()==2500,"condition survives transfer and extraction");
 Check(Items(await Get(1)).All(x => Id(x!) != Id(rifle)), "death cannot restore old owner's transferred rifle");
 await Post("/raids/snapshot", new { operationId = Guid.NewGuid(), raidId = raid, sequence = 1, items = worldItems, results = Array.Empty<object>() }, HttpStatusCode.Conflict);
 await Post("/raids/close", new { operationId = Guid.NewGuid(), raidId = raid });
@@ -88,8 +108,20 @@ await Post("/raids/enter", new { operationId = Guid.NewGuid(), raidId = raid3, p
 var third = (await client.GetFromJsonAsync<JsonObject>($"/raids/{raid3}"))!;
 var thirdItems = third["items"]!.AsArray();
 Check(thirdItems.All(x => x!["custody"]!.GetValue<string>() == "inventory"), "returned equipment is active inventory next raid");
-thirdItems.First(x => Id(x!) == Id(rifle))!["magazine"] = 6;
+var worn=thirdItems.First(x => Id(x!) == Id(rifle))!;
+foreach(var invalid in new[]{-1,10001,2750})
+{
+    worn["durability"]=invalid;
+    await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=raid3,sequence=1,items=thirdItems,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+}
+worn.AsObject().Remove("durability");
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=raid3,sequence=1,items=thirdItems,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+Check(true,"invalid, increased or omitted worn condition rejected");
+worn["durability"]=0;
+worn["magazine"]=6;
 await Post("/raids/snapshot", new { operationId = Guid.NewGuid(), raidId = raid3, sequence = 1, items = thirdItems, results = Array.Empty<object>() });
+var persistedThird=(await client.GetFromJsonAsync<JsonObject>($"/raids/{raid3}"))!;
+Check(persistedThird["items"]!.AsArray().Single(x=>Id(x!)==Id(rifle))!["durability"]!.GetValue<int>()==0,"zero condition persisted explicitly");
 await Post("/raids/close", new { operationId = Guid.NewGuid(), raidId = raid3 });
 Console.WriteLine("NEXT RAID AND CROSS-ROUTE RECEIPT PASSED");// Same revision concurrent requests serialize: precisely one winner.
 a = await Get(1);
@@ -109,6 +141,10 @@ var fourthItems=fourth["items"]!.AsArray();
 foreach(var i in fourthItems.Where(x=>x!["owner"]!.GetValue<string>()==ownerA))i!["custody"]="result";
 var extra=JsonSerializerNode(new {id=Guid.NewGuid(),kind=0,slot=-1,magazine=10,reserve=30,owner="",custody="world"});
 fourthItems.Add(extra);
+extra["durability"]=9750;
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=raid4,sequence=1,items=fourthItems,results=new[]{new{profile=1,outcome="extracted"}}},HttpStatusCode.Conflict);
+extra.Remove("durability");
+Check(true,"new worn identity rejected; legacy absent condition remains full");
 await Post("/raids/snapshot",new {operationId=Guid.NewGuid(),raidId=raid4,sequence=1,items=fourthItems,results=new[]{new{profile=1,outcome="extracted"}}});
 extra["custody"]="result";extra["owner"]=ownerA;extra["slot"]=1;
 await Post("/raids/snapshot",new {operationId=Guid.NewGuid(),raidId=raid4,sequence=2,items=fourthItems,results=Array.Empty<object>()},HttpStatusCode.Conflict);
@@ -137,6 +173,9 @@ var healingItems=healingState["items"]!.AsArray();
 var groundKit=Guid.NewGuid();
 healingItems.Add(JsonSerializerNode(new{id=groundKit,kind=1,slot=-1,magazine=0,reserve=0,owner="",custody="world"}));
 await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=1,items=healingItems,results=Array.Empty<object>()});
+var invalidSupply=healingItems.DeepClone().AsArray();invalidSupply.First(x=>x!["kind"]!.GetValue<int>()==1)!["durability"]=10000;
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=2,items=invalidSupply,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+Check(true,"supplies cannot acquire rifle durability");
 JsonArray CopyHealing()=>healingItems.DeepClone().AsArray();
 void Consumed(JsonNode item){item["custody"]="consumed";item["owner"]="";item["slot"]=-1;}
 var badHeal=CopyHealing();Consumed(badHeal.Single(x=>Id(x!)==healingScrap)!);
@@ -177,6 +216,8 @@ await Post("/raids/close",new{operationId=Guid.NewGuid(),raidId=afterHealing});
 var healingReport=Environment.GetEnvironmentVariable("MARAU6_HEALING_REPORT");
 if(healingReport!=null)await File.WriteAllTextAsync(healingReport,System.Text.Json.JsonSerializer.Serialize(new{raid=healingRaid,item=kits[0],profile=1}));
 
+var wearReport=Environment.GetEnvironmentVariable("MARAU6_WEAR_REPORT");
+if(wearReport!=null)await File.WriteAllTextAsync(wearReport,JsonSerializer.Serialize(new{legacy=legacyBody,raid=raid3,item=Id(rifle)}));
 // Save a replay contract for the launcher to verify after restarting the backend.
 a=await Get(1);
 var restartBody=new {operationId=Guid.NewGuid(),profile=1,revision=Rev(a),item=Id(Items(a).First()!),destination=120};

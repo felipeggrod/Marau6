@@ -298,7 +298,7 @@ void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AMarau6Character::DoFire()
 {
-    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle() && !Healing->IsHealing() && !bInventoryOpen && !IsReloading() && GetMagazineAmmo() > 0)
+    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle() && !Healing->IsHealing() && !bInventoryOpen && !IsReloading() && GetMagazineAmmo() > 0 && GetRifleDurability() > 0)
     {
         ServerFire();
     }
@@ -307,7 +307,7 @@ void AMarau6Character::DoFire()
 void AMarau6Character::ServerFire_Implementation()
 {
     if (!HasAuthority() || !CanParticipate() || Healing->IsHealing() || !GetController() || !GetWorld()
-        || !HasEquippedRifle() || AmmoState.bReloading || AmmoState.Magazine <= 0)
+        || !HasEquippedRifle() || AmmoState.bReloading || AmmoState.Magazine <= 0 || GetRifleDurability() <= 0)
     {
         return;
     }
@@ -325,9 +325,11 @@ void AMarau6Character::ServerFire_Implementation()
     {
         return;
     }
+    if(!Inventory->SaveEquippedShot()) return;
     LastServerFireTime = Now;
-    if(!Inventory->SaveEquippedAmmo(AmmoState.Magazine-1,AmmoState.Reserve)) return;
-    --AmmoState.Magazine;
+    // The ledger is the sole writer; copy the committed round count, never spend twice.
+    const auto* FiredRifle=Inventory->ItemAt(Marau6Slots::Weapon);
+    AmmoState.Magazine=FiredRifle->Magazine;AmmoState.Reserve=FiredRifle->Reserve;
     ForceNetUpdate();
     const FVector End = Start + Aim.Vector() * PrototypeRange;
     FCollisionQueryParams Query(SCENE_QUERY_STAT(Marau6PrototypeFire), false, this);
@@ -526,6 +528,11 @@ void AMarau6Character::PostInitializeComponents()
     if(HasAuthority() && GetWorld() && GetWorld()->IsGameWorld()) Inventory->InitializeForRaid();
 }
 bool AMarau6Character::HasEquippedRifle() const { return Inventory && Inventory->HasRifle(); }
+int32 AMarau6Character::GetRifleDurability() const
+{
+    const auto* Item=Inventory?Inventory->ItemAt(Marau6Slots::Weapon):nullptr;
+    return Item && Item->IsRifle()?Item->Durability:0;
+}
 void AMarau6Character::OnInventoryChanged(bool bEquipmentChanged)
 {
     Healing->NotifyInventoryChanged(bEquipmentChanged);

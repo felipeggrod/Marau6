@@ -1,7 +1,7 @@
-﻿param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE,[switch]$Bots,[switch]$Healing)
+﻿param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE,[switch]$Bots,[switch]$Healing,[switch]$Wear)
 $ErrorActionPreference='Stop'
-if(($Bots -or $Healing) -and !$PIE){throw 'Use -Bots ou -Healing junto com -PIE.'}
-if($Bots -and $Healing){throw 'Escolha apenas um modo: -Bots ou -Healing.'}
+if(($Bots -or $Healing -or $Wear) -and !$PIE){throw 'Use -Bots ou -Healing junto com -PIE.'}
+if(@(@($Bots,$Healing,$Wear)|Where-Object {$_}).Count -gt 1){throw 'Escolha apenas um modo: -Bots, -Healing ou -Wear.'}
 $root=Split-Path $PSScriptRoot -Parent
 $settings=Get-Content (Join-Path $root 'LocalSettings/marau6.json') -Raw | ConvertFrom-Json
 $env:MARAU6_DB_PASSWORD=$settings.password
@@ -23,16 +23,30 @@ try {
     for($n=0;$n -lt 50;$n++){try{Invoke-RestMethod 'http://127.0.0.1:5187/health' -Headers @{'X-Marau6-Key'=$settings.apiKey}|Out-Null;$ready=$true;break}catch{Start-Sleep -Milliseconds 200}}
     if(!$ready){throw 'Backend de testes não iniciou.'}
     if($PIE){
-        $testName=if($Healing){'HealingOnlineAndTeardown'}elseif($Bots){'BotsOnlineAndTeardown'}else{'BaseOnlineAndTeardown'}
+        $testName=if($Wear){'WearOnlineAndTeardown'}elseif($Healing){'HealingOnlineAndTeardown'}elseif($Bots){'BotsOnlineAndTeardown'}else{'BaseOnlineAndTeardown'}
         $log=Join-Path $root 'LocalSettings/unreal-pie-online.log'
         $gameArgs=@('"'+(Join-Path $root 'Marau6.uproject')+'"','-unattended','-NullRHI','-nosound','-nop4','-Marau6Integration',"-Marau6IntegrationRun=$runId",'"-ExecCmds=Automation RunTests EditorLifecycle.'+$testName+'"','"-TestExit=Automation Test Queue Empty"','"-AbsLog='+$log+'"')
         if($Bots -or $Healing){$gameArgs+='-Marau6BotsTest'}
         if($Healing){$gameArgs+='-Marau6HealingTest'}
+        if($Wear){$gameArgs+='-Marau6WearTest'}
         $game=Start-Process -FilePath $EditorExe -ArgumentList $gameArgs -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/unreal-pie-console.log') -RedirectStandardError (Join-Path $root 'LocalSettings/unreal-pie-error.log')
         if(!$game.WaitForExit(180000)){Stop-Process -Id $game.Id;throw 'Timeout no teste PIE.'}
         $body=Get-Content -LiteralPath $log -Raw
         if($body -notmatch ("Result=\{Success\} Name=\{"+$testName+"\}") -or $body -match 'Result=\{Fail\}'){throw "Falha no PIE. Consulte $log"}
         Write-Host 'PASS two real PIE clients: profiles, reserved equipment, replication and End Play'
+        if($Wear){
+            $report=Get-Content -LiteralPath (Join-Path $root 'LocalSettings/wear-test-result.json') -Raw|ConvertFrom-Json
+            if($report.run -ne $runId){throw 'Relatorio de desgaste pertence a outra execucao.'}
+            Stop-Process -Id $server.Id;$server.WaitForExit()
+            $server=Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList @('"'+$dll+'"','--urls','http://127.0.0.1:5187') -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/wear-restart.log') -RedirectStandardError (Join-Path $root 'LocalSettings/wear-restart-error.log')
+            $ready=$false
+            for($n=0;$n -lt 50;$n++){try{Invoke-RestMethod 'http://127.0.0.1:5187/health' -Headers @{'X-Marau6-Key'=$settings.apiKey}|Out-Null;$ready=$true;break}catch{Start-Sleep -Milliseconds 200}}
+            if(!$ready){throw 'Backend de testes nao reiniciou.'}
+            $profile=Invoke-RestMethod 'http://127.0.0.1:5187/state/2' -Headers @{'X-Marau6-Key'=$settings.apiKey}
+            $rifles=@($profile.items|Where-Object {$_.id -eq $report.item})
+            if($rifles.Count -ne 1 -or $null -eq $rifles[0].durability -or $rifles[0].durability -ne 0 -or $rifles[0].magazine -ne 10){throw 'Rifle perdeu durabilidade, identidade ou municao apos reinicio.'}
+            Write-Host 'PASS zero condition and remaining ammo survive transfer, two raids and backend restart'
+        }
         if($Healing){
             $report=Get-Content -LiteralPath (Join-Path $root 'LocalSettings/healing-test-result.json') -Raw|ConvertFrom-Json
             if($report.run -ne $runId){throw 'Relatorio de cura pertence a outra execucao.'}

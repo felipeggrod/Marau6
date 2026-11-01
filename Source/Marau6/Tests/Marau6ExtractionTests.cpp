@@ -74,7 +74,7 @@ bool FMarau6ExtractionTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Extraction preserves health"), A->GetHealth(),100.f);
     Advance(2.f);
     TestEqual(TEXT("Cancelled reload never transfers ammo"), A->GetMagazineAmmo(),9);
-    TestEqual(TEXT("Cancelled reload preserves reserve"), A->GetReserveAmmo(),30);
+    TestEqual(TEXT("Cancelled reload preserves reserve"), A->GetReserveAmmo(),40);
     B->SetActorLocation(FVector(0,0,96)); Update(B); Advance(4.f);
     B->TakeDamage(100,Damage,B->GetController(),A); Update(B); Advance(3.f); Update(B);
     TestEqual(TEXT("Death wins over countdown"), B->GetRaidState(), EMarau6RaidState::Eliminated);

@@ -66,7 +66,7 @@ struct FCycle
             if(!PA->GetInventory()->ItemAt(10)){Error(TEXT("missing reserved rifle"));return;}
             Rifle=PA->GetInventory()->ItemAt(10)->Id;
             PA->ProcessEvent(PA->FindFunction(TEXT("ServerFire")),nullptr);
-            if(PA->GetMagazineAmmo()!=9){Error(TEXT("server fire not saved"));return;}
+            if(PA->GetMagazineAmmo()!=9 || PA->GetRifleDurability()!=9750){Error(TEXT("server fire not saved"));return;}
             if(!L->Drop(PA->GetInventory(),Rifle)){Error(TEXT("drop failed"));return;}
             Advance(TEXT("fired and dropped rifle"));break;
         case 5:
@@ -86,7 +86,7 @@ struct FCycle
             PB->SetActorLocation(FVector(1400,0,96));Advance(TEXT("death committed and extracting B"));break;
         case 7:
             if(CB->IsInRaid() || !Item(CB,0))return;
-            if(Item(CB,0)->GetStringField(TEXT("id"))!=Rifle.ToString(EGuidFormats::DigitsWithHyphensLower) || Item(CB,0)->GetIntegerField(TEXT("magazine"))!=9){Error(TEXT("extracted transfer mismatch"));return;}
+            if(Item(CB,0)->GetStringField(TEXT("id"))!=Rifle.ToString(EGuidFormats::DigitsWithHyphensLower) || Item(CB,0)->GetIntegerField(TEXT("magazine"))!=9 || Item(CB,0)->GetIntegerField(TEXT("durability"))!=9750){Error(TEXT("extracted transfer mismatch"));return;}
             if(!bReconnectProbe)
             {
                 UClass* ControllerClass=CA->GetClass();UClass* PawnClass=PA->GetClass();
@@ -107,7 +107,7 @@ struct FCycle
             if(!CB->IsInRaid() || !P->CanMutate())return;
             if(!L->Move(PB->GetInventory(),Rifle,10)){Error(TEXT("equip retained rifle"));return;}
             PB->ProcessEvent(PB->FindFunction(TEXT("ServerFire")),nullptr);
-            if(PB->GetMagazineAmmo()!=8){Error(TEXT("retained ammo not usable"));return;}
+            if(PB->GetMagazineAmmo()!=8 || PB->GetRifleDurability()!=9500){Error(TEXT("retained ammo not usable"));return;}
             Advance(TEXT("second raid fire committed"));break;
         case 10:
                         if(!P->CanMutate())return;

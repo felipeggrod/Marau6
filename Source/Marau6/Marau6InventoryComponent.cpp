@@ -27,6 +27,8 @@ void UMarau6InventoryComponent::ApplySnapshot(const FMarau6InventorySnapshot& Va
 void UMarau6InventoryComponent::OnRep_Snapshot()
 { if(auto* C=Character()){C->OnInventoryChanged(false);if(Snapshot.bFinalized) C->OpenInventoryResult();} }
 void UMarau6InventoryComponent::OnRep_Equipment() { if(auto* C=Character()) C->OnInventoryChanged(false); }
+bool UMarau6InventoryComponent::SaveEquippedShot()
+{ if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) return L->SaveShot(this);return false; }
 bool UMarau6InventoryComponent::SaveEquippedAmmo(int32 Magazine,int32 Reserve)
 { if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) return L->SaveAmmo(this,Magazine,Reserve); return false; }
 bool UMarau6InventoryComponent::FinalizeRaid(bool bExtracted)

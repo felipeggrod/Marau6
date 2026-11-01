@@ -12,6 +12,7 @@ class UMarau6InventoryComponent : public UActorComponent
 public:
     UMarau6InventoryComponent();
     void InitializeForRaid();
+    bool SaveEquippedShot();
     bool SaveEquippedAmmo(int32 Magazine,int32 Reserve);
     bool FinalizeRaid(bool bExtracted);
     void ApplySnapshot(const FMarau6InventorySnapshot& Value);
