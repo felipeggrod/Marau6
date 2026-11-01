@@ -41,7 +41,7 @@ void AMarau6PrototypeHUD::DrawHUD()
             {
                 const int32 Kind=(*I)->GetIntegerField(TEXT("kind"));
                 Label+=Kind==0?TEXT(": Rifle"):Kind==1?TEXT(": Suprimentos"):TEXT(": Pecas");
-                if(Kind==0)Label+=FString::Printf(TEXT(" [%d/%d]"),(*I)->GetIntegerField(TEXT("magazine")),(*I)->GetIntegerField(TEXT("reserve")));
+                if(Kind==0)Label+=FString::Printf(TEXT(" [%d/%d | %.1f%%]"),(*I)->GetIntegerField(TEXT("magazine")),(*I)->GetIntegerField(TEXT("reserve")),((*I)->HasField(TEXT("durability"))?(*I)->GetIntegerField(TEXT("durability")):10000)/100.f);
             }
             else Label+=TEXT(": --");
             if(Index==BasePC->GetBaseSelection())DrawRect(FLinearColor(.18f,.2f,.05f,1.f),X*Scale-4,Y*Scale-2,350*Scale,25*Scale);
@@ -61,12 +61,13 @@ void AMarau6PrototypeHUD::DrawHUD()
     DrawText(FString::Printf(TEXT("VIDA: %.0f / 100"), Character->GetHealth()),
         bAlive ? FLinearColor::White : FLinearColor::Red, 22.f, 20.f,
         GEngine->GetMediumFont(), 1.f);
-    DrawText(FString::Printf(TEXT("MUNICAO: %d | RESERVA: %d"),
-        Character->GetMagazineAmmo(), Character->GetReserveAmmo()),
+    DrawText(FString::Printf(TEXT("MUNICAO: %d | RESERVA: %d | DURABILIDADE: %.1f%%"),
+        Character->GetMagazineAmmo(), Character->GetReserveAmmo(),Character->GetRifleDurability()/100.f),
         FLinearColor::White, 22.f, 50.f, GEngine->GetSmallFont(), 1.f);
     const TCHAR* Status = Raid == EMarau6RaidState::Extracted ? TEXT("EXTRAIDO - reinicie o teste") : !bAlive ? TEXT("ELIMINADO - reinicie o teste")
         : Character->GetHealing()->IsHealing() ? TEXT("CURANDO - tiro e recarga bloqueados")
         : !Character->HasEquippedRifle() ? TEXT("SEM ARMA - equipe um rifle pelo inventario")
+        : Character->GetRifleDurability()<=0 ? TEXT("DURABILIDADE: 0% - ARMA NAO DISPARA")
         : Character->IsInventoryOpen() ? TEXT("TAB: fechar inventario | R: recarregar")
         : Character->IsReloading() ? TEXT("RECARREGANDO...")
         : Character->GetMagazineAmmo() == 0 && Character->GetReserveAmmo() == 0
@@ -133,7 +134,7 @@ void AMarau6PrototypeHUD::DrawHUD()
                 ? FString::Printf(TEXT("SAFE %d"),Slot-Marau6Slots::SafeStart+1):FString::Printf(TEXT("MOCHILA %d"),Slot+1);
             const auto* Item=Inventory->ItemAt(Slot);
             FString Text=Label+TEXT(": ")+(Item?Item->Name():TEXT("--"));
-            if(Item && Item->IsRifle()) Text+=FString::Printf(TEXT(" [%d / %d]"),Item->Magazine,Item->Reserve);
+            if(Item && Item->IsRifle()) Text+=FString::Printf(TEXT(" [%d/%d | %.1f%%]"),Item->Magazine,Item->Reserve,Item->Durability/100.f);
             if(Item && Item->Id==Character->GetInventoryMoveSource()) Text=TEXT("* ")+Text;
             const bool bSelected=Slot==Character->GetSelectedInventorySlot();
             if(bSelected) DrawRect(FLinearColor(.2f,.2f,0,.9f),Left+6,Top+45+Slot*24,353,23);

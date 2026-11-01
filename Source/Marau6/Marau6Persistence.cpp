@@ -235,7 +235,7 @@ void UMarau6Persistence::EnterRaid(AMarau6PlayerController* PC)
         const auto Profile=Reply->GetObjectField(TEXT("profile"));FGuid Owner;FGuid::Parse(Profile->GetStringField(TEXT("id")),Owner);
         TArray<FMarau6Item> Equipment;
         for(const auto& V:Reply->GetArrayField(TEXT("items")))
-        {auto I=V->AsObject();FMarau6Item Item;FGuid::Parse(I->GetStringField(TEXT("id")),Item.Id);Item.Kind=static_cast<EMarau6ItemKind>(I->GetIntegerField(TEXT("kind")));Item.Slot=I->GetIntegerField(TEXT("slot"));Item.Magazine=I->GetIntegerField(TEXT("magazine"));Item.Reserve=I->GetIntegerField(TEXT("reserve"));Equipment.Add(Item);}
+        {auto I=V->AsObject();FMarau6Item Item;FGuid::Parse(I->GetStringField(TEXT("id")),Item.Id);Item.Kind=static_cast<EMarau6ItemKind>(I->GetIntegerField(TEXT("kind")));Item.Slot=I->GetIntegerField(TEXT("slot"));Item.Magazine=I->GetIntegerField(TEXT("magazine"));Item.Reserve=I->GetIntegerField(TEXT("reserve"));if(Item.IsRifle())I->TryGetNumberField(TEXT("durability"),Item.Durability);Equipment.Add(Item);}
         if(!C)
         {
             if(!GetWorld()->GetSubsystem<UMarau6ItemLedger>()->AbandonReserved(Owner,Equipment))Fail(TEXT("Nao foi possivel registrar a desistencia; diario preservado"));

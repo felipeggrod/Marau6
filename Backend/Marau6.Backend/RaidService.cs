@@ -31,6 +31,7 @@ public static class RaidService
         {
             Require(ids.TryGetValue(old.Id, out var next), "Snapshot não pode apagar identidades");
             Require(next!.Kind == old.Kind, "Tipo de item imutável");
+            if(old.Kind==0) Require(next.EffectiveDurability <= old.EffectiveDurability, "Durabilidade não pode aumentar");
             if (old.Custody is "result" or "consumed") Require(Same(old, next), "Resultado ou consumo confirmado é imutável");
         }
         var activeOwners = r.Participants.Where(x => x.Outcome == "active").Select(x => Profiles.Get(s, x.Profile).Id.ToString()).ToHashSet();
@@ -38,8 +39,9 @@ public static class RaidService
         var finalOwners = r.Participants.Where(x => x.Outcome != "active").Select(x => Profiles.Get(s, x.Profile).Id.ToString()).ToHashSet();
         foreach (var i in c.Items)
         {
-            Require(i.Id != Guid.Empty && i.Kind is >= 0 and <= 2 && i.Magazine is >= 0 and <= 10 && i.Reserve is >= 0 and <= 30, "Dados de item inválidos");
+            Require(i.Id != Guid.Empty && i.Kind is >= 0 and <= 2 && i.Magazine is >= 0 and <= 10 && i.Reserve is >= 0 and <= 40, "Dados de item inválidos");
             Require(i.Kind == 0 || i.Magazine == 0 && i.Reserve == 0, "Munição em item incompatível");
+            Require(i.Kind==0 ? i.EffectiveDurability is >=0 and <=10000 : i.Durability==null, "Durabilidade incompatível");
             Require(i.Custody is "world" or "recovery" or "inventory" or "result" or "consumed", "Custódia inválida");
             if(i.Custody=="consumed")
             {
@@ -51,6 +53,7 @@ public static class RaidService
             }
             if (!known.Contains(i.Id))
             {
+                Require(i.Kind!=0 || i.EffectiveDurability==10000, "Rifle novo deve nascer íntegro");
                 Require(i.Owner == "" && i.Custody is "world" or "recovery", "Novo loot deve nascer no mundo");
                 Require(!s.Profiles.Any(p => p.Items.Any(x => x.Id == i.Id)) && !s.Raids.Where(x => x.Id != r.Id).Any(x => x.Items.Any(y => y.Id == i.Id)), "Identidade já registrada");
             }
@@ -76,7 +79,7 @@ public static class RaidService
         r.Items = c.Items.Select(x => x.Copy()).ToList(); r.Sequence = c.Sequence;
         return new { sequence = r.Sequence };
     }
-    static bool Same(Item a, Item b) => a.Id == b.Id && a.Kind == b.Kind && a.Slot == b.Slot && a.Magazine == b.Magazine && a.Reserve == b.Reserve && a.Owner == b.Owner && a.Custody == b.Custody;
+    static bool Same(Item a, Item b) => a.Id == b.Id && a.Kind == b.Kind && a.Slot == b.Slot && a.Magazine == b.Magazine && a.Reserve == b.Reserve && a.Owner == b.Owner && a.Custody == b.Custody && (a.Kind==0 ? a.EffectiveDurability==b.EffectiveDurability : a.Durability==b.Durability);
     public static object Close(State s, RaidCommand c)
     {
         var r = Raid(s, c.RaidId);

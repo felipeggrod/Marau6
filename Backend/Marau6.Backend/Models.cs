@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 namespace Marau6;
 
 public sealed class Conflict(string message) : Exception(message);
@@ -10,6 +11,10 @@ public sealed class Item
     public int Reserve { get; set; }
     public string Owner { get; set; } = "";
     public string Custody { get; set; } = "inventory";
+    // Omit absent legacy fields: existing command receipt hashes must remain valid.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Durability { get; set; }
+    [JsonIgnore] public int EffectiveDurability => Durability ?? 10000;
     public Item Copy() => (Item)MemberwiseClone();
 }
 public sealed class Profile

@@ -109,4 +109,25 @@ bool FMarau6HealingDurabilityTest::RunTest(const FString&)
     TestEqual(TEXT("Retry applies one forty HP effect"),F.P->GetHealth(),80.f);TestEqual(TEXT("Successful retry keeps terminal GUID"),F.Custody(Kit.Id),FString(TEXT("consumed")));TestNull(TEXT("Used safe kit cannot be restored by inventory sync"),F.P->GetInventory()->ItemAt(8));
     F.P->GetHealing()->UpdateHealing();TestFalse(TEXT("Repeated consume denied"),F.L->ConsumeForHealing(F.P->GetInventory(),Kit.Id));TestEqual(TEXT("Repeated completion cannot heal twice"),F.P->GetHealth(),80.f);return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6WearJournalTest,"Marau6.Combat.WearJournalRollback",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FMarau6WearJournalTest::RunTest(const FString&)
+{
+    FHealingWorld F(true);auto* Bridge=F.W->GetSubsystem<UMarau6Persistence>();Bridge->bEnabled=true;Bridge->bReady=true;Bridge->bSending=true;
+    FMarau6Item Rifle;Rifle.Id=FGuid::NewGuid();Rifle.Kind=EMarau6ItemKind::Rifle;Rifle.Slot=10;Rifle.Magazine=10;Rifle.Reserve=40;Rifle.Durability=250;
+    TestTrue(TEXT("Import rifle with one remaining shot of condition"),F.L->Import(F.P->GetInventory(),FGuid::NewGuid(),{Rifle}));
+    const FString Root=FPaths::ProjectSavedDir()/TEXT("Automation/Wear");IFileManager::Get().MakeDirectory(*Root,true);const FString Blocker=Root/TEXT("blocked-parent");FFileHelper::SaveStringToFile(TEXT("file"),*Blocker);
+    Bridge->JournalPath=Blocker/TEXT("journal.json");Bridge->RaidId=FGuid::NewGuid().ToString();
+    auto* Target=F.W->SpawnActor<AMarau6Character>(F.P->GetClass(),FVector(500,0,96),FRotator::ZeroRotator);F.P->GetController()->SetControlRotation(FRotator::ZeroRotator);
+    AddExpectedError(TEXT("Falha ao gravar diario"),EAutomationExpectedErrorFlags::Contains,1);
+    F.P->ProcessEvent(F.P->FindFunction(TEXT("ServerFire")),nullptr);
+    TestEqual(TEXT("Failed journal keeps exact condition"),F.P->GetRifleDurability(),250);TestEqual(TEXT("Failed journal keeps item ammo"),F.P->GetInventory()->ItemAt(10)->Magazine,10);
+    TestEqual(TEXT("Failed journal keeps replicated ammo"),F.P->GetMagazineAmmo(),10);TestEqual(TEXT("Unpaid shot causes no damage"),Target->GetHealth(),100.f);
+    Bridge->bFatal=false;Bridge->bReady=true;Bridge->JournalPath=Root/TEXT("journal.json");
+    F.P->ProcessEvent(F.P->FindFunction(TEXT("ServerFire")),nullptr);
+    TestEqual(TEXT("Retry wears exactly once"),F.P->GetRifleDurability(),0);TestEqual(TEXT("Retry spends exactly one round"),F.P->GetMagazineAmmo(),9);TestEqual(TEXT("Last working shot applies damage"),Target->GetHealth(),75.f);
+    F.Advance(.3f);F.P->ProcessEvent(F.P->FindFunction(TEXT("ServerFire")),nullptr);TestEqual(TEXT("Zero blocks further damage"),Target->GetHealth(),75.f);
+    FString Journal;FFileHelper::LoadFileToString(Journal,*Bridge->JournalPath);TestTrue(TEXT("Durability zero present in durable command"),Journal.Contains(TEXT("durability")));
+    return true;
+}
 #endif

@@ -35,6 +35,7 @@ public:
     bool Move(UMarau6InventoryComponent* Component, FGuid Expected, int32 Destination);
     bool Drop(UMarau6InventoryComponent* Component, FGuid Expected);
     bool ConsumeForHealing(UMarau6InventoryComponent* Component,FGuid Id);
+    bool SaveShot(UMarau6InventoryComponent* Component);
     bool SaveAmmo(UMarau6InventoryComponent* Component, int32 Magazine, int32 Reserve);
     bool Finalize(UMarau6InventoryComponent* Component, bool bExtracted);
     void LootRemoved(AMarau6LootActor* Actor, FGuid Id);

@@ -12,6 +12,8 @@ struct FMarau6Item
     UPROPERTY() int32 Slot = INDEX_NONE;
     UPROPERTY() int32 Magazine = 0;
     UPROPERTY() int32 Reserve = 0;
+    // Fixed-point: 10000 = 100%, one accepted shot costs 250 = 2.5 points.
+    UPROPERTY() int32 Durability = 10000;
     bool IsRifle() const { return Kind == EMarau6ItemKind::Rifle; }
     FString Name() const { return IsRifle() ? TEXT("Rifle") : Kind == EMarau6ItemKind::Supply ? TEXT("Suprimentos") : TEXT("Pecas"); }
 };
