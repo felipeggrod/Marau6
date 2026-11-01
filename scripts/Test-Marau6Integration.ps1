@@ -1,7 +1,8 @@
-﻿param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE,[switch]$Bots,[switch]$Healing,[switch]$Wear)
+﻿param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE,[switch]$Bots,[switch]$Healing,[switch]$Wear,[switch]$InventoryUI,[switch]$Render)
 $ErrorActionPreference='Stop'
-if(($Bots -or $Healing -or $Wear) -and !$PIE){throw 'Use -Bots ou -Healing junto com -PIE.'}
-if(@(@($Bots,$Healing,$Wear)|Where-Object {$_}).Count -gt 1){throw 'Escolha apenas um modo: -Bots, -Healing ou -Wear.'}
+if($Render -and (!$InventoryUI -or !$PIE)){throw 'Use -Render somente com -PIE -InventoryUI.'}
+if(($Bots -or $Healing -or $Wear -or $InventoryUI) -and !$PIE){throw 'Use -Bots ou -Healing junto com -PIE.'}
+if(@(@($Bots,$Healing,$Wear,$InventoryUI)|Where-Object {$_}).Count -gt 1){throw 'Escolha apenas um modo: -Bots, -Healing ou -Wear.'}
 $root=Split-Path $PSScriptRoot -Parent
 $settings=Get-Content (Join-Path $root 'LocalSettings/marau6.json') -Raw | ConvertFrom-Json
 $env:MARAU6_DB_PASSWORD=$settings.password
@@ -23,17 +24,32 @@ try {
     for($n=0;$n -lt 50;$n++){try{Invoke-RestMethod 'http://127.0.0.1:5187/health' -Headers @{'X-Marau6-Key'=$settings.apiKey}|Out-Null;$ready=$true;break}catch{Start-Sleep -Milliseconds 200}}
     if(!$ready){throw 'Backend de testes não iniciou.'}
     if($PIE){
-        $testName=if($Wear){'WearOnlineAndTeardown'}elseif($Healing){'HealingOnlineAndTeardown'}elseif($Bots){'BotsOnlineAndTeardown'}else{'BaseOnlineAndTeardown'}
+        $testName=if($InventoryUI){'InventoryUIOnlineAndTeardown'}elseif($Wear){'WearOnlineAndTeardown'}elseif($Healing){'HealingOnlineAndTeardown'}elseif($Bots){'BotsOnlineAndTeardown'}else{'BaseOnlineAndTeardown'}
         $log=Join-Path $root 'LocalSettings/unreal-pie-online.log'
         $gameArgs=@('"'+(Join-Path $root 'Marau6.uproject')+'"','-unattended','-NullRHI','-nosound','-nop4','-Marau6Integration',"-Marau6IntegrationRun=$runId",'"-ExecCmds=Automation RunTests EditorLifecycle.'+$testName+'"','"-TestExit=Automation Test Queue Empty"','"-AbsLog='+$log+'"')
         if($Bots -or $Healing){$gameArgs+='-Marau6BotsTest'}
         if($Healing){$gameArgs+='-Marau6HealingTest'}
         if($Wear){$gameArgs+='-Marau6WearTest'}
+        if($InventoryUI){$gameArgs+='-Marau6InventoryUITest'}
+        if($Render){$gameArgs=@($gameArgs|ForEach-Object {$_.Replace('-NullRHI','')});$gameArgs+='-Marau6UIRender'}
         $game=Start-Process -FilePath $EditorExe -ArgumentList $gameArgs -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/unreal-pie-console.log') -RedirectStandardError (Join-Path $root 'LocalSettings/unreal-pie-error.log')
         if(!$game.WaitForExit(180000)){Stop-Process -Id $game.Id;throw 'Timeout no teste PIE.'}
         $body=Get-Content -LiteralPath $log -Raw
         if($body -notmatch ("Result=\{Success\} Name=\{"+$testName+"\}") -or $body -match 'Result=\{Fail\}'){throw "Falha no PIE. Consulte $log"}
         Write-Host 'PASS two real PIE clients: profiles, reserved equipment, replication and End Play'
+        if($InventoryUI){
+            $report=Get-Content -LiteralPath (Join-Path $root 'LocalSettings/inventory-ui-result.json') -Raw|ConvertFrom-Json
+            if($report.run -ne $runId){throw 'Relatorio da interface pertence a outra execucao.'}
+            Stop-Process -Id $server.Id;$server.WaitForExit()
+            $server=Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList @('"'+$dll+'"','--urls','http://127.0.0.1:5187') -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/inventory-ui-restart.log') -RedirectStandardError (Join-Path $root 'LocalSettings/inventory-ui-restart-error.log')
+            $ready=$false
+            for($n=0;$n -lt 50;$n++){try{Invoke-RestMethod 'http://127.0.0.1:5187/health' -Headers @{'X-Marau6-Key'=$settings.apiKey}|Out-Null;$ready=$true;break}catch{Start-Sleep -Milliseconds 200}}
+            if(!$ready){throw 'Backend de testes nao reiniciou.'}
+            $profile=Invoke-RestMethod 'http://127.0.0.1:5187/state/1' -Headers @{'X-Marau6-Key'=$settings.apiKey}
+            $rifles=@($profile.items|Where-Object {$_.id -eq $report.item})
+            if($rifles.Count -ne 1 -or $rifles[0].durability -ne 10000 -or $rifles[0].magazine -ne 10 -or $rifles[0].reserve -ne 40){throw 'A interface mudou identidade, condicao ou municao.'}
+            Write-Host 'PASS inventory UI: base and raid transfers, stale/rejected requests, two raids and backend restart'
+        }
         if($Wear){
             $report=Get-Content -LiteralPath (Join-Path $root 'LocalSettings/wear-test-result.json') -Raw|ConvertFrom-Json
             if($report.run -ne $runId){throw 'Relatorio de desgaste pertence a outra execucao.'}

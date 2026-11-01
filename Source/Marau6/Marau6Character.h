@@ -58,6 +58,7 @@ class AMarau6Character : public ACharacter
 {
 	GENERATED_BODY()
     friend class FMarau6InventoryReorderTest;
+    friend class FMarau6UIInputTest;
 
 	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
@@ -184,6 +185,12 @@ public:
     int32 GetRifleDurability() const;
     bool IsInventoryOpen() const { return bInventoryOpen; }
     void ConfirmInventoryMove();
+    void SelectInventorySlot(int32 Slot) { if(Slot>=0 && Slot<11)SelectedInventorySlot=Slot; }
+    void CancelInventorySelection() { InventoryMoveSource.Invalidate(); }
+    void ToggleInventoryFromUI() { ToggleInventory(); }
+    void InventoryShortcut(FKey Key);
+    void CloseInventoryFromUI() { bInventoryOpen=false;InventoryMoveSource.Invalidate(); }
+    void RequestInventoryMove(FGuid Id,int32 Destination);
     FGuid GetInventoryMoveSource() const { return InventoryMoveSource; }
     int32 GetSelectedInventorySlot() const { return SelectedInventorySlot; }
     void OpenInventoryResult() { bInventoryOpen=true; }

@@ -101,26 +101,29 @@ void AMarau6PlayerController::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AMarau6PlayerController,bUseBase);DOREPLIFETIME(AMarau6PlayerController,bInRaid);
+    DOREPLIFETIME(AMarau6PlayerController,InventoryContext);DOREPLIFETIME(AMarau6PlayerController,bBaseBusy);
     DOREPLIFETIME(AMarau6PlayerController,BaseProfile);DOREPLIFETIME(AMarau6PlayerController,BaseJson);DOREPLIFETIME(AMarau6PlayerController,BaseMessage);DOREPLIFETIME(AMarau6PlayerController,BaseBackendStatus);
 }
 void AMarau6PlayerController::OnPossess(APawn* NewPawn)
 {Super::OnPossess(NewPawn);if(UMarau6Persistence::UsesPersistentBase(GetWorld()))if(auto* P=Cast<AMarau6Character>(NewPawn))P->SetAtBase(true);}
-void AMarau6PlayerController::SelectOne(){if(bUseBase && !bInRaid){BaseSource=INDEX_NONE;ServerSelectProfile(1);}}
-void AMarau6PlayerController::SelectTwo(){if(bUseBase && !bInRaid){BaseSource=INDEX_NONE;ServerSelectProfile(2);}}
+void AMarau6PlayerController::SelectOne(){if(bUseBase && !bInRaid){InventoryMessage.Empty();BaseSource=INDEX_NONE;ServerSelectProfile(1);}}
+void AMarau6PlayerController::SelectTwo(){if(bUseBase && !bInRaid){InventoryMessage.Empty();BaseSource=INDEX_NONE;ServerSelectProfile(2);}}
 void AMarau6PlayerController::BaseUp(){if(bUseBase && !bInRaid)BaseSelection=(BaseSelection+42)%43;}
 void AMarau6PlayerController::BaseDown(){if(bUseBase && !bInRaid)BaseSelection=(BaseSelection+1)%43;}
 void AMarau6PlayerController::BaseAccept()
 {
+    if(IsLocalPlayerController() && InventoryContext.IsValid() && IsInventoryVisible()){InventoryKeyboardAccept();return;}
     if(auto* RaidCharacter=Cast<AMarau6Character>(GetPawn()))
         if(!bUseBase || bInRaid){RaidCharacter->ConfirmInventoryMove();return;}
     if(!bUseBase || bInRaid || BaseProfile==0)return;
     if(BaseSource==INDEX_NONE)BaseSource=BaseSelection;
     else {ServerBaseMove(BaseSlot(BaseSource),BaseSlot(BaseSelection));BaseSource=INDEX_NONE;}
 }
-void AMarau6PlayerController::BaseEnter(){if(bUseBase && !bInRaid)ServerEnterRaid();}
-void AMarau6PlayerController::BaseNext(){if(bUseBase && !bInRaid)ServerNextRound();}
+void AMarau6PlayerController::BaseEnter(){if(bUseBase && !bInRaid){InventoryMessage.Empty();ServerEnterRaid();}}
+void AMarau6PlayerController::BaseNext(){if(bUseBase && !bInRaid){InventoryMessage.Empty();ServerNextRound();}}
 void AMarau6PlayerController::ServerSelectProfile_Implementation(int32 N){GetWorld()->GetSubsystem<UMarau6Persistence>()->SelectProfile(this,N);}
-void AMarau6PlayerController::ServerBaseMove_Implementation(int32 S,int32 D){GetWorld()->GetSubsystem<UMarau6Persistence>()->MoveBase(this,S,D);}
+void AMarau6PlayerController::ServerBaseMove_Implementation(int32 S,int32 D)
+{TWeakObjectPtr<AMarau6PlayerController> Weak(this);GetWorld()->GetSubsystem<UMarau6Persistence>()->MoveBase(this,S,D,[Weak](bool,const FString& Why){if(auto* PC=Weak.Get())PC->ClientInventoryNotice(Why);});}
 void AMarau6PlayerController::ServerEnterRaid_Implementation(){GetWorld()->GetSubsystem<UMarau6Persistence>()->EnterRaid(this);}
 void AMarau6PlayerController::ServerNextRound_Implementation(){GetWorld()->GetSubsystem<UMarau6Persistence>()->NextRound(this);}
 void AMarau6PlayerController::BaseRight()

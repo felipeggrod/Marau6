@@ -22,6 +22,7 @@ struct FMarau6InventorySnapshot
 {
     GENERATED_BODY()
     UPROPERTY() TArray<FMarau6Item> Items;
+    UPROPERTY() int32 Revision=0;
     UPROPERTY() bool bFinalized = false;
     UPROPERTY() int32 LostCount = 0;
 };

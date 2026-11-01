@@ -312,4 +312,13 @@ bool FMarau6InventoryReorderTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("All input operations conserve unique items"),F.Ledger->GetItemCount(),4);
     return true;
 }
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6UIContractTest,"Marau6.Inventory.UIContract",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FMarau6UIContractTest::RunTest(const FString&)
+{
+    const auto* RPC=AMarau6PlayerController::StaticClass()->FindFunctionByName(TEXT("ServerInventoryMoveUI"));
+    if(!TestNotNull(TEXT("Correlated authoritative inventory UI request exists"),RPC))return false;
+    TestTrue(TEXT("UI move is reliable server RPC"),RPC->HasAllFunctionFlags(FUNC_Net|FUNC_NetServer|FUNC_NetReliable));
+    TestNotNull(TEXT("Native inventory user widget registered"),FindObject<UClass>(nullptr,TEXT("/Script/Marau6.Marau6InventoryWidget")));
+    return true;
+}
 #endif
