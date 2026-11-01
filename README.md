@@ -99,3 +99,6 @@ Dois perfis locais, stash de32 slots, concessão inicial única e reserva do equ
 
 ## Bots básicos
 Três bots por rodada, com patrulha, visão, combate no servidor e uma Peça por morte. Consulte [funcionamento e roteiro de teste](docs/bots-basicos.md).
+
+## Cura e suprimentos
+TAB, selecione Suprimentos e H: uso unico, ate40 de vida apos4 segundos. H/movimento/dano cancelam antes da conclusao; tiro e recarga ficam bloqueados durante uso. Consumo confirmado pelo servidor persiste inclusive no safe. Veja [regras e teste](docs/cura-suprimentos.md).

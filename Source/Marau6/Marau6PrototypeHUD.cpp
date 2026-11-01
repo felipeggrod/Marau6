@@ -2,6 +2,7 @@
 #include "Marau6PlayerController.h"
 #include "Serialization/JsonSerializer.h"
 #include "Marau6Character.h"
+#include "Marau6HealingComponent.h"
 #include "Marau6InventoryComponent.h"
 #include "Marau6LootActor.h"
 #include "Engine/Canvas.h"
@@ -54,7 +55,7 @@ void AMarau6PrototypeHUD::DrawHUD()
     const AMarau6Character* Character = Cast<AMarau6Character>(PlayerOwner->GetPawn());
     if (!Character) return;
 
-    DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.65f), 12.f, 12.f, 400.f, 210.f);
+    DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.65f), 12.f, 12.f, 560.f, 210.f);
     const bool bAlive = Character->IsAlive();
     const EMarau6RaidState Raid = Character->GetRaidState();
     DrawText(FString::Printf(TEXT("VIDA: %.0f / 100"), Character->GetHealth()),
@@ -64,6 +65,7 @@ void AMarau6PrototypeHUD::DrawHUD()
         Character->GetMagazineAmmo(), Character->GetReserveAmmo()),
         FLinearColor::White, 22.f, 50.f, GEngine->GetSmallFont(), 1.f);
     const TCHAR* Status = Raid == EMarau6RaidState::Extracted ? TEXT("EXTRAIDO - reinicie o teste") : !bAlive ? TEXT("ELIMINADO - reinicie o teste")
+        : Character->GetHealing()->IsHealing() ? TEXT("CURANDO - tiro e recarga bloqueados")
         : !Character->HasEquippedRifle() ? TEXT("SEM ARMA - equipe um rifle pelo inventario")
         : Character->IsInventoryOpen() ? TEXT("TAB: fechar inventario | R: recarregar")
         : Character->IsReloading() ? TEXT("RECARREGANDO...")
@@ -96,6 +98,13 @@ void AMarau6PrototypeHUD::DrawHUD()
         DrawLine(X - 7.f, Y, X + 7.f, Y, FLinearColor::White, 1.5f);
         DrawLine(X, Y - 7.f, X, Y + 7.f, FLinearColor::White, 1.5f);
     }
+    const auto* Healing=Character->GetHealing();
+    if(Healing->IsHealing())
+    {
+        DrawText(FString::Printf(TEXT("CURANDO: %.1fs | H: cancelar"),Healing->Remaining()),FLinearColor::Yellow,22,165,GEngine->GetSmallFont(),1);
+        DrawRect(FLinearColor(.15f,.15f,.15f,.9f),22,190,360,7);DrawRect(FLinearColor::Green,22,190,360*FMath::Clamp(1.f-Healing->Remaining()/4.f,0.f,1.f),7);
+    }
+    else if(!Healing->Status().IsEmpty())DrawText(Healing->Status(),FLinearColor::White,22,165,GEngine->GetSmallFont(),1);
     const UMarau6InventoryComponent* Inventory=Character->GetInventory();
     const auto& Snapshot=Inventory->GetSnapshot();
     DrawText(TEXT("TAB: inventario | E: coletar loot sob a mira"),FLinearColor::White,22,140,GEngine->GetSmallFont(),1);
@@ -116,6 +125,7 @@ void AMarau6PrototypeHUD::DrawHUD()
     {
         const float Left=FMath::Max(12.f,Canvas->ClipX-380.f), Top=205.f;
         DrawRect(FLinearColor(0,0,0,.85f),Left,Top,365,420);
+
         DrawText(Snapshot.bFinalized?TEXT("ITENS MANTIDOS NESTA PARTIDA"):TEXT("INVENTARIO"),FLinearColor::White,Left+12,Top+10,GEngine->GetMediumFont(),1);
         for(int32 Slot=0;Slot<Marau6Slots::Total;++Slot)
         {
@@ -132,8 +142,8 @@ void AMarau6PrototypeHUD::DrawHUD()
         }
         DrawText(TEXT("Setas: slot | Enter: origem / destino"),FLinearColor::White,Left+12,Top+325,GEngine->GetSmallFont(),1);
         DrawText(TEXT("F: equipar | G: descartar | P: safe / mochila"),FLinearColor::White,Left+12,Top+349,GEngine->GetSmallFont(),1);
-        DrawText(Snapshot.bFinalized?TEXT("Resultado guardado ate encerrar o Play"):TEXT("* Origem | Mesmo slot: cancelar | TAB: fechar"),FLinearColor::White,Left+12,Top+381,GEngine->GetSmallFont(),1);
+        DrawText(TEXT("H: usar Suprimentos | 40 de vida / 4s"),FLinearColor::White,Left+12,Top+373,GEngine->GetSmallFont(),1);
+        DrawText(Snapshot.bFinalized?TEXT("Resultado guardado ate encerrar o Play"):TEXT("* Origem | Mesmo slot: cancelar | TAB: fechar"),FLinearColor::White,Left+12,Top+397,GEngine->GetSmallFont(),1);
     }
 
 }
-

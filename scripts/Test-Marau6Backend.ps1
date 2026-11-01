@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $settings = Get-Content (Join-Path $root 'LocalSettings/marau6.json') -Raw | ConvertFrom-Json
 $env:MARAU6_DB_PASSWORD = $settings.password
@@ -13,6 +13,7 @@ $testBuild = Join-Path $root 'LocalSettings/test-build'
 if ($LASTEXITCODE -ne 0) { throw 'Build falhou.' }
 $dll = Join-Path $testBuild 'Marau6.Backend.dll'
 $p = Start-Process -FilePath (Get-Command dotnet).Source -ArgumentList @('"' + $dll + '"', '--urls', 'http://127.0.0.1:5187') -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/test-backend.log') -RedirectStandardError (Join-Path $root 'LocalSettings/test-backend-error.log')
+$env:MARAU6_HEALING_REPORT=Join-Path $root 'LocalSettings/healing-contract.json'
 $env:MARAU6_REPLAY_FILE=Join-Path $root 'LocalSettings/replay-test.json'
 try {
     $ready = $false
@@ -32,6 +33,11 @@ try {
     $received=Invoke-RestMethod 'http://127.0.0.1:5187/move' -Method Post -Headers @{'X-Marau6-Key'=$settings.apiKey} -ContentType 'application/json' -Body ($replay.body|ConvertTo-Json -Depth 20)
     if($received.revision -ne $replay.response.revision){throw 'Recibo não sobreviveu ao reinício.'}
     Write-Host 'PASS receipt replay after backend process restart'
+    $heal=Get-Content -LiteralPath $env:MARAU6_HEALING_REPORT -Raw|ConvertFrom-Json
+    $raid=Invoke-RestMethod ('http://127.0.0.1:5187/raids/'+$heal.raid) -Headers @{'X-Marau6-Key'=$settings.apiKey}
+    $profile=Invoke-RestMethod ('http://127.0.0.1:5187/state/'+$heal.profile) -Headers @{'X-Marau6-Key'=$settings.apiKey}
+    if(@($raid.items|Where-Object {$_.id -eq $heal.item -and $_.custody -eq 'consumed'}).Count -ne 1 -or @($profile.items|Where-Object {$_.id -eq $heal.item}).Count -ne 0){throw 'Consumo nao sobreviveu ao reinicio.'}
+    Write-Host 'PASS consumed supply remains absent after backend process restart'
 } finally {
     if (!$p.HasExited) { Stop-Process -Id $p.Id }
     Remove-Item Env:MARAU6_DB -ErrorAction SilentlyContinue

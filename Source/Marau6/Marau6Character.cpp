@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Marau6Character.h"
+#include "Marau6HealingComponent.h"
 #include "Marau6Bot.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerStart.h"
@@ -36,6 +37,7 @@ AMarau6Character::AMarau6Character()
 {
 	bReplicates = true;
     Inventory=CreateDefaultSubobject<UMarau6InventoryComponent>(TEXT("Inventory"));
+    Healing=CreateDefaultSubobject<UMarau6HealingComponent>(TEXT("Healing"));
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
 	
@@ -135,6 +137,8 @@ void AMarau6Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
                     BindInventoryKey(TEXT("ItemDrop"),EKeys::G,&AMarau6Character::DropSelectedItem);
                     BindInventoryKey(TEXT("ItemEquip"),EKeys::F,&AMarau6Character::EquipSelectedItem);
                     BindInventoryKey(TEXT("ItemProtect"),EKeys::P,&AMarau6Character::ProtectSelectedItem);
+                    UInputAction* HealAction=NewObject<UInputAction>(this,FName(TEXT("ItemHeal")));HealAction->ValueType=EInputActionValueType::Boolean;
+                    PrototypeFireMapping->MapKey(HealAction,EKeys::H);EnhancedInputComponent->BindAction(HealAction,ETriggerEvent::Started,Healing.Get(),&UMarau6HealingComponent::UseSelected);
                     Subsystem->AddMappingContext(PrototypeFireMapping, 1);
                     EnhancedInputComponent->BindAction(PrototypeFireAction, ETriggerEvent::Started,
                         this, &AMarau6Character::DoFire);
@@ -195,7 +199,7 @@ void AMarau6Character::DoMove(float Right, float Forward)
 	if (CanParticipate() && GetController())
 	{
 		// pass the move inputs
-		AddMovementInput(GetActorRightVector(), Right);
+		if(!FMath::IsNearlyZero(Right) || !FMath::IsNearlyZero(Forward))Healing->CancelFromMovement(); AddMovementInput(GetActorRightVector(), Right);
 		AddMovementInput(GetActorForwardVector(), Forward);
 	}
 }
@@ -203,6 +207,7 @@ void AMarau6Character::DoMove(float Right, float Forward)
 void AMarau6Character::DoJumpStart()
 {
 	if (!CanParticipate()) return;
+	Healing->CancelFromMovement();
 	// pass Jump to the character
 	Jump();
 }
@@ -247,7 +252,7 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
         return 0.0f;
     }
 
-    const float PreviousHealth=Health;
+    Healing->Cancel(TEXT("Dano interrompeu a cura: suprimento preservado.")); const float PreviousHealth=Health;
     const auto PreviousRaid=RaidStatus;
     const float AppliedDamage = FMath::Min(DamageAmount, Health);
     Health = FMath::Clamp(Health - AppliedDamage, 0.0f, 100.0f);
@@ -272,6 +277,7 @@ float AMarau6Character::TakeDamage(float DamageAmount, const FDamageEvent& Damag
 
 void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+    Healing->Cancel(TEXT("Cura interrompida ao encerrar a sessao."));
     CancelReload();
     if (APlayerController* PC = Cast<APlayerController>(GetController()))
     {
@@ -292,7 +298,7 @@ void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void AMarau6Character::DoFire()
 {
-    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle() && !bInventoryOpen && !IsReloading() && GetMagazineAmmo() > 0)
+    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle() && !Healing->IsHealing() && !bInventoryOpen && !IsReloading() && GetMagazineAmmo() > 0)
     {
         ServerFire();
     }
@@ -300,7 +306,7 @@ void AMarau6Character::DoFire()
 
 void AMarau6Character::ServerFire_Implementation()
 {
-    if (!HasAuthority() || !CanParticipate() || !GetController() || !GetWorld()
+    if (!HasAuthority() || !CanParticipate() || Healing->IsHealing() || !GetController() || !GetWorld()
         || !HasEquippedRifle() || AmmoState.bReloading || AmmoState.Magazine <= 0)
     {
         return;
@@ -358,7 +364,7 @@ void AMarau6Character::MulticastShot_Implementation(
 
 void AMarau6Character::DoReload()
 {
-    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle())
+    if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle() && !Healing->IsHealing())
     {
         ServerReload();
     }
@@ -366,7 +372,7 @@ void AMarau6Character::DoReload()
 
 void AMarau6Character::ServerReload_Implementation()
 {
-    if (!HasAuthority() || !CanParticipate() || !GetController() || !GetWorld()
+    if (!HasAuthority() || !CanParticipate() || Healing->IsHealing() || !GetController() || !GetWorld()
         || !HasEquippedRifle() || AmmoState.bReloading || AmmoState.Magazine >= PrototypeMagazineCapacity
         || AmmoState.Reserve <= 0)
     {
@@ -477,7 +483,7 @@ void AMarau6Character::UpdateExtraction()
     const double Now = GetWorld()->GetTimeSeconds();
     if (RaidStatus.State != EMarau6RaidState::Extracting || Zone != ExtractionZone.Get())
     {
-        ExtractionZone = Zone;
+        Healing->Cancel(TEXT("Extracao interrompeu a cura: suprimento preservado.")); ExtractionZone = Zone;
         RaidStatus.State = EMarau6RaidState::Extracting;
         RaidStatus.ExtractionEndServerTime = Now + FMath::Clamp(Zone->GetHoldSeconds(),1.f,60.f);
         ForceNetUpdate();
@@ -522,6 +528,7 @@ void AMarau6Character::PostInitializeComponents()
 bool AMarau6Character::HasEquippedRifle() const { return Inventory && Inventory->HasRifle(); }
 void AMarau6Character::OnInventoryChanged(bool bEquipmentChanged)
 {
+    Healing->NotifyInventoryChanged(bEquipmentChanged);
     const bool bEquipped=HasEquippedRifle();
     FirstPersonRifle->SetVisibility(bEquipped,true);
     ThirdPersonRifle->SetVisibility(bEquipped,true);
@@ -624,6 +631,7 @@ bool AMarau6Character::FindRaidEntry(FVector& Location,FRotator& Rotation) const
 bool AMarau6Character::SetAtBase(bool bValue)
 {
     if(!HasAuthority())return false;
+    Healing->ResetForBase();
     if(!bValue)
     {
         FVector Location;FRotator Rotation;

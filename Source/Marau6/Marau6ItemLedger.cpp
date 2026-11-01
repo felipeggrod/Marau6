@@ -262,7 +262,7 @@ TArray<TSharedPtr<FJsonValue>> UMarau6ItemLedger::Export() const
         O->SetNumberField(TEXT("kind"),static_cast<int32>(R.Item.Kind));O->SetNumberField(TEXT("slot"),bOwned?R.Item.Slot:-1);
         O->SetNumberField(TEXT("magazine"),R.Item.Magazine);O->SetNumberField(TEXT("reserve"),R.Item.Reserve);
         O->SetStringField(TEXT("owner"),bOwned?R.OwnerId.ToString(EGuidFormats::DigitsWithHyphensLower):TEXT(""));
-        O->SetStringField(TEXT("custody"),R.Custody==EMarau6Custody::Result?TEXT("result"):bOwned?TEXT("inventory"):TEXT("world"));
+        O->SetStringField(TEXT("custody"),R.Custody==EMarau6Custody::Consumed?TEXT("consumed"):R.Custody==EMarau6Custody::Result?TEXT("result"):bOwned?TEXT("inventory"):TEXT("world"));
         Out.Add(MakeShared<FJsonValueObject>(O));
     }
     return Out;
@@ -320,4 +320,18 @@ bool UMarau6ItemLedger::GrantWorld(FGuid Id,EMarau6ItemKind Kind,FVector Locatio
     // Durable before visible. Recovery and world actors have the same exported custody.
     if(!Persist()){Records.Remove(Id);return false;}
     SpawnWorld(Id,Location);return true;
+}
+
+bool UMarau6ItemLedger::ConsumeForHealing(UMarau6InventoryComponent* C,FGuid Id)
+{
+    if(!Usable(C))return false;
+    auto* Pawn=C->Character();auto* Record=Owned(C,Id);
+    if(!Pawn || Pawn->GetRaidState()!=EMarau6RaidState::Active || Pawn->Health>=100 || !Record || Record->Item.Kind!=EMarau6ItemKind::Supply || Record->Item.Slot<0 || Record->Item.Slot>=Marau6Slots::Weapon)return false;
+    const FMarau6ItemRecord Before=*Record;
+    Record->Custody=EMarau6Custody::Consumed;Record->OwnerId.Invalidate();Record->Item.Slot=INDEX_NONE;Record->Loot.Reset();
+    if(!Persist()){Records.FindChecked(Id)=Before;return false;}
+    // No actor creation or gameplay delegate occurs before this paid-for health
+    // change. Sync callbacks observe both the terminal item and applied health.
+    Pawn->Health=FMath::Min(100.f,Pawn->Health+40.f);Pawn->OnRep_Health();Pawn->ForceNetUpdate();
+    Sync(C->GetSessionInventoryId());return true;
 }
