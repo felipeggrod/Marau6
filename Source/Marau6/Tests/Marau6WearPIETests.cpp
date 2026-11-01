@@ -42,7 +42,7 @@ public:
     bool Update() override
     {
         const double Now=FPlatformTime::Seconds();
-        if(Now-Started>115){D->Test->AddError(FString::Printf(TEXT("Wear PIE timeout phase %d sent %d"),Phase,Sent));return true;}
+        if(Now-Started>180){D->Test->AddError(FString::Printf(TEXT("Wear PIE timeout phase %d sent %d"),Phase,Sent));return true;}
         UWorld* Server=nullptr;TArray<UWorld*> Clients;
         for(const auto& C:GEngine->GetWorldContexts())if(auto* W=C.World();W && W->WorldType==EWorldType::PIE)
         {if(W->GetNetMode()==NM_DedicatedServer)Server=W;else if(W->GetNetMode()==NM_Client)Clients.Add(W);}
@@ -68,12 +68,22 @@ public:
             if(!CA->CanParticipate() || !CB->CanParticipate() || !CA->GetInventory()->ItemAt(10) || !CB->GetInventory()->ItemAt(10) || !Bridge->IsSettled())return false;
             Rifle=A->GetInventory()->ItemAt(10)->Id;Round=Bridge->GetRoundId();
             D->Test->TestEqual(TEXT("Fresh network rifle reserve40"),CA->GetReserveAmmo(),40);D->Test->TestEqual(TEXT("Initial network condition"),CA->GetRifleDurability(),10000);
+            auto* Ledger=Server->GetSubsystem<UMarau6ItemLedger>();
+            for(int N=0;N<3;N++)
+            {
+                const FGuid BoxId=FGuid::NewGuid();const FVector Point=A->GetPawnViewLocation()+FVector(120,0,0);
+                D->Test->TestTrue(TEXT("Grant wear-test ammunition"),Ledger->GrantWorld(BoxId,EMarau6ItemKind::Ammo,Point));
+                AMarau6LootActor* Box=nullptr;for(TActorIterator<AMarau6LootActor> It(Server);It;++It)if(It->GetItem().Id==BoxId)Box=*It;
+                Remote[0]->SetControlRotation((Point-A->GetPawnViewLocation()).Rotation());
+                D->Test->TestTrue(TEXT("Collect wear-test ammunition"),Ledger->Pickup(A->GetInventory(),Box,BoxId));
+                D->Test->TestTrue(TEXT("Ammo finances100 shots plus loaded blocked shot"),Ledger->Move(A->GetInventory(),BoxId,10));
+            }
             Local[0]->SetControlRotation(FRotator(75,90,0));Remote[0]->SetControlRotation(FRotator(75,90,0));Next();return false;
         }
         if(Phase==3)
         {
-            const int32 Accepted=(10000-A->GetRifleDurability())/250;
-            if(Accepted==40){Next();return false;}
+            const int32 Accepted=(10000-A->GetRifleDurability())/100;
+            if(Accepted==100){Next();return false;}
             if(Now<NextRequest)return false;
             NextRequest=Now+.4;
             if(A->GetMagazineAmmo()==0){Request(CA,TEXT("ServerReload"));return false;}
@@ -86,13 +96,13 @@ public:
         {
             if(CA->GetRifleDurability()!=0)return false;
             if(A->GetMagazineAmmo()==0){if(Now>=NextRequest){Request(CA,TEXT("ServerReload"));NextRequest=Now+.4;}return false;}
-            if(CA->GetMagazineAmmo()!=10 || A->IsReloading())return false;
+            if(CA->GetMagazineAmmo()!=20 || A->IsReloading())return false;
             Request(CA,TEXT("ServerFire"));Next();return false;
         }
         if(Phase==5)
         {
             if(Now-At<.7)return false;
-            D->Test->TestEqual(TEXT("Server rejects shot41 with loaded ammunition"),A->GetMagazineAmmo(),10);D->Test->TestEqual(TEXT("Owner retains zero"),CA->GetRifleDurability(),0);
+            D->Test->TestEqual(TEXT("Server rejects shot101 with loaded ammunition"),A->GetMagazineAmmo(),20);D->Test->TestEqual(TEXT("Owner retains zero"),CA->GetRifleDurability(),0);
             CA->GetInventory()->ServerDrop(Rifle);Next();return false;
         }
         if(Phase==6)
@@ -116,7 +126,7 @@ public:
         }
         if(Phase==8)
         {
-            if(Now-At<.6)return false;D->Test->TestEqual(TEXT("New owner cannot fire broken transferred rifle"),B->GetMagazineAmmo(),10);
+            if(Now-At<.6)return false;D->Test->TestEqual(TEXT("New owner cannot fire broken transferred rifle"),B->GetMagazineAmmo(),20);
             A->TakeDamage(100,FDamageEvent(),Remote[1],B);B->SetActorLocation(FVector(1400,0,96));B->GetCharacterMovement()->StopMovementImmediately();Next();return false;
         }
         if(Phase==9)
@@ -142,7 +152,7 @@ public:
         }
         if(Phase==12)
         {
-            if(Now-At<.6)return false;D->Test->TestEqual(TEXT("Next raid still blocks fire without spending ammo"),B->GetMagazineAmmo(),10);
+            if(Now-At<.6)return false;D->Test->TestEqual(TEXT("Next raid still blocks fire without spending ammo"),B->GetMagazineAmmo(),20);
             B->SetActorLocation(FVector(1400,0,96));B->GetCharacterMovement()->StopMovementImmediately();Next();return false;
         }
         if(Phase==13)return !Remote[1]->IsInRaid() && Bridge->IsSettled();

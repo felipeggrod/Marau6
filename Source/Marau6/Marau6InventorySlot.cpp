@@ -1,4 +1,6 @@
 #include "Marau6InventorySlot.h"
+#include "Marau6ItemIcon.h"
+#include "Widgets/SBoxPanel.h"
 #include "Marau6PlayerController.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Widgets/Layout/SBorder.h"
@@ -10,24 +12,30 @@
 TSharedRef<FMarau6InventoryDragOperation> FMarau6InventoryDragOperation::New(AMarau6PlayerController* PC,const FMarau6InventoryUIRequest& R)
 {
     auto Op=MakeShared<FMarau6InventoryDragOperation>();Op->Controller=PC;Op->Request=R;
-    const auto* Item=PC->InventoryUIItemAt(R.Source);Op->Label=Item?Item->Name():TEXT("Item");Op->Construct();return Op;
+    const auto* Item=PC->InventoryUIItemAt(R.Source);Op->Label=Item?Item->Name():TEXT("Item");Op->IconKind=Item?static_cast<int32>(Item->Kind):-1;Op->Construct();return Op;
 }
 TSharedPtr<SWidget> FMarau6InventoryDragOperation::GetDefaultDecorator() const
-{return SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(FLinearColor(.1f,.2f,.14f,1)).Padding(12)[SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FLinearColor::White)];}
+{return SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor(FLinearColor(.08f,.09f,.085f,1)).Padding(8)
+    [SNew(SVerticalBox)+SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)[SNew(SBox).WidthOverride(90).HeightOverride(45)[SNew(SMarau6ItemIcon).Kind(IconKind)]]
+    +SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(Label)).ColorAndOpacity(FLinearColor::White)]];}
+
 void FMarau6InventoryDragOperation::OnDrop(bool Handled,const FPointerEvent& Event)
 {if(!Handled)if(auto* P=Controller.Get())P->SetInventoryNotice(TEXT("Movimentacao cancelada."));FGameDragDropOperation::OnDrop(Handled,Event);}
 void SMarau6InventorySlot::Construct(const FArguments& Args)
 {
     PC=Args._Controller;Slot=Args._Slot;
-    ChildSlot[SNew(SBox).MinDesiredHeight(62)[SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor_Lambda([this]{return FSlateColor(SlotColor());}).Padding(FMargin(5,7))
-        [SNew(STextBlock).Text_Lambda([this]{return FText::FromString(ItemLabel());}).Font(FCoreStyle::GetDefaultFontStyle("Regular",14)).Justification(ETextJustify::Center).AutoWrapText(true).ColorAndOpacity(FLinearColor(.92f,.96f,.93f,1))]]];
+    SetToolTipText(TAttribute<FText>::CreateLambda([this]{auto* P=PC.Get();const auto* I=P?P->InventoryUIItemAt(Slot):nullptr;return I?FText::FromString(I->Name()):FText::GetEmpty();}));
+    ChildSlot[SNew(SBox).MinDesiredHeight(62)[SNew(SBorder).BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush")).BorderBackgroundColor_Lambda([this]{return FSlateColor(SlotColor());}).Padding(FMargin(4,3))
+        [SNew(SVerticalBox)+SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
+            [SNew(SBox).WidthOverride(60).HeightOverride(30)[SNew(SMarau6ItemIcon).Kind_Lambda([this]{auto* P=PC.Get();const auto* I=P?P->InventoryUIItemAt(Slot):nullptr;return I?static_cast<int32>(I->Kind):-1;})]]
+        +SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text_Lambda([this]{return FText::FromString(ItemLabel());}).Font(FCoreStyle::GetDefaultFontStyle("Regular",12)).Justification(ETextJustify::Center).AutoWrapText(true).ColorAndOpacity(FLinearColor(.92f,.96f,.93f,1))]]]];
 }
 FString SMarau6InventorySlot::ItemLabel() const
 {
     auto* P=PC.Get();if(!P)return TEXT("--");const auto* I=P->InventoryUIItemAt(Slot);
     FString Label=Slot==10?TEXT("ARMA"):Slot>=100?FString::Printf(TEXT("%02d"),Slot-99):Slot>=8?FString::Printf(TEXT("SAFE %d"),Slot-7):FString::Printf(TEXT("%d"),Slot+1);
     if(P->GetInventoryKeyboardSourceSlot()==Slot)Label=TEXT("* ORIGEM\n")+Label;
-    if(I){Label+=TEXT("\n")+(I->Kind==EMarau6ItemKind::Supply?FString(TEXT("Suprim.")):I->Name());if(I->IsRifle())Label+=Slot==10?FString::Printf(TEXT("\n%d/%d | %.1f%%"),I->Magazine,I->Reserve,I->Durability/100.f):FString::Printf(TEXT("\n%.1f%%"),I->Durability/100.f);}
+    if(I){if(I->IsAmmo())Label+=TEXT(" | 20 balas");if(I->IsRifle())Label+=Slot==10?FString::Printf(TEXT("\n%d/%d | %.1f%%"),I->Magazine,I->Reserve,I->Durability/100.f):FString::Printf(TEXT("\n%.1f%%"),I->Durability/100.f);}
     else Label+=TEXT("\n--");return Label;
 }
 FLinearColor SMarau6InventorySlot::SlotColor() const
@@ -53,7 +61,7 @@ FReply SMarau6InventorySlot::OnDragOver(const FGeometry&,const FDragDropEvent& E
 {
     auto Op=E.GetOperationAs<FMarau6InventoryDragOperation>();auto* P=PC.Get();if(!Op || Op->Controller!=PC || !P)return FReply::Unhandled();
     const auto Reason=FMarau6InventoryUIModel::MoveReason(P->GetInventoryUIItems(),Op->Request.Source,Slot,P->IsInventoryAtBase());
-    P->SetInventoryNotice(Reason.IsEmpty()?TEXT("Solte para mover ou trocar."):Reason);return FReply::Handled();
+    P->SetInventoryNotice(Reason.IsEmpty()?TEXT("Solte para mover, trocar ou abastecer o rifle com 20 balas."):Reason);return FReply::Handled();
 }
 FReply SMarau6InventorySlot::OnDrop(const FGeometry&,const FDragDropEvent& E)
 {

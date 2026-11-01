@@ -39,28 +39,35 @@ public static class RaidService
         var finalOwners = r.Participants.Where(x => x.Outcome != "active").Select(x => Profiles.Get(s, x.Profile).Id.ToString()).ToHashSet();
         foreach (var i in c.Items)
         {
-            Require(i.Id != Guid.Empty && i.Kind is >= 0 and <= 2 && i.Magazine is >= 0 and <= 10 && i.Reserve is >= 0 and <= 40, "Dados de item inválidos");
+            Require(i.Id != Guid.Empty && i.Kind is >= 0 and <= 3 && i.Magazine is >= 0 and <= 20 && i.Reserve is >= 0 and <= 120, "Dados de item inválidos");
             Require(i.Kind == 0 || i.Magazine == 0 && i.Reserve == 0, "Munição em item incompatível");
             Require(i.Kind==0 ? i.EffectiveDurability is >=0 and <=10000 : i.Durability==null, "Durabilidade incompatível");
             Require(i.Custody is "world" or "recovery" or "inventory" or "result" or "consumed", "Custódia inválida");
             if(i.Custody=="consumed")
             {
                 var previous=r.Items.SingleOrDefault(x=>x.Id==i.Id);
-                Require(i.Kind==1 && previous!=null &&
+                Require(i.Kind is 1 or 3 && previous!=null &&
                     (previous.Custody=="consumed" && Same(previous,i) ||
                      previous.Custody=="inventory" && activeOwners.Contains(previous.Owner) && previous.Slot is >=0 and <10),
-                    "Consumo exige suprimento de inventário ativo");
+                    "Consumo exige suprimento ou munição de inventário ativo");
             }
             if (!known.Contains(i.Id))
             {
                 Require(i.Kind!=0 || i.EffectiveDurability==10000, "Rifle novo deve nascer íntegro");
                 Require(i.Owner == "" && i.Custody is "world" or "recovery", "Novo loot deve nascer no mundo");
-                Require(!s.Profiles.Any(p => p.Items.Any(x => x.Id == i.Id)) && !s.Raids.Where(x => x.Id != r.Id).Any(x => x.Items.Any(y => y.Id == i.Id)), "Identidade já registrada");
+                Require(!s.ConsumedItems.Contains(i.Id) && !s.Profiles.Any(p => p.Items.Any(x => x.Id == i.Id)) && !s.Raids.Where(x => x.Id != r.Id).Any(x => x.Items.Any(y => y.Id == i.Id)), "Identidade já registrada");
             }
             if (i.Custody is "inventory" or "result")
                 Require((activeOwners.Contains(i.Owner) || i.Custody == "result" && finalOwners.Contains(i.Owner)) && Inventory.Accepts(i.Slot, i.Kind) && i.Slot < 100, "Dono/slot inválido");
             else Require(i.Owner == "" && i.Slot == -1, "Loot no mundo não tem dono nem slot");
             if(i.Custody == "result" && finalOwners.Contains(i.Owner)) Require(r.Items.Any(old => old.Id==i.Id && old.Custody=="result" && Same(old,i)), "Resultado nao pode receber novos itens apos finalizacao");
+        }
+        foreach(var owner in activeOwners)
+        {
+            int spent=r.Items.Count(old=>old.Kind==3 && old.Custody=="inventory" && old.Owner==owner && ids[old.Id].Custody=="consumed");
+            int gained=r.Items.Where(old=>old.Kind==0 && old.Custody=="inventory" && old.Owner==owner)
+                .Sum(old=>Math.Max(0,ids[old.Id].Reserve-old.Reserve));
+            Require(gained==spent*20,"Aumento de reserva exige consumo correspondente de munição");
         }
         Require(c.Items.Where(x => x.Owner != "").Select(x => (x.Owner,x.Slot)).Distinct().Count() == c.Items.Count(x => x.Owner != ""), "Slot duplicado");
         Require(c.Results.Select(x => x.Profile).Distinct().Count() == c.Results.Count, "Resultados repetidos");

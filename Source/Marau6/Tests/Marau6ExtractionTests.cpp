@@ -53,7 +53,7 @@ bool FMarau6ExtractionTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Reentry does not reuse old elapsed time"), A->GetRaidState(), EMarau6RaidState::Extracting);
     TestEqual(TEXT("Other player unaffected"), B->GetRaidState(), EMarau6RaidState::Active);
     A->ProcessEvent(A->FindFunctionChecked(TEXT("ServerFire")),nullptr);
-    TestEqual(TEXT("Can shoot during countdown"), A->GetMagazineAmmo(),9);
+    TestEqual(TEXT("Can shoot during countdown"), A->GetMagazineAmmo(),19);
     Advance(2.5f); Update(A);
     A->ProcessEvent(A->FindFunctionChecked(TEXT("ServerReload")),nullptr);
     TestTrue(TEXT("Can reload during countdown"), A->IsReloading());
@@ -73,7 +73,7 @@ bool FMarau6ExtractionTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Extracted cannot take damage"), A->TakeDamage(25,Damage,B->GetController(),B),0.f);
     TestEqual(TEXT("Extraction preserves health"), A->GetHealth(),100.f);
     Advance(2.f);
-    TestEqual(TEXT("Cancelled reload never transfers ammo"), A->GetMagazineAmmo(),9);
+    TestEqual(TEXT("Cancelled reload never transfers ammo"), A->GetMagazineAmmo(),19);
     TestEqual(TEXT("Cancelled reload preserves reserve"), A->GetReserveAmmo(),40);
     B->SetActorLocation(FVector(0,0,96)); Update(B); Advance(4.f);
     B->TakeDamage(100,Damage,B->GetController(),A); Update(B); Advance(3.f); Update(B);

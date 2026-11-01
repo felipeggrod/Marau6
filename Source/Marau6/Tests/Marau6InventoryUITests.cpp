@@ -1,6 +1,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 #include "Misc/AutomationTest.h"
 #include "Marau6PlayerController.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
 #include "Marau6Character.h"
 #include "Marau6InventoryUIModel.h"
 #include "Marau6InventoryComponent.h"
@@ -90,6 +92,39 @@ bool FMarau6UIAckTest::RunTest(const FString&)
     F.PC->bUseBase=true;F.PC->BaseProfile=1;F.PC->BaseJson=TEXT("{\"items\":[],\"revision\":1}");F.PC->BaseMessage=TEXT("Base pronta");F.PC->UpdateInventoryUI();
     F.PC->InventoryMessage=TEXT("Transferencia salva.");F.PC->BaseMessage=TEXT("Perfil ocupado pelo outro jogador");F.PC->UpdateInventoryUI();
     TestTrue(TEXT("New authoritative base refusal replaces old success notice"),F.PC->GetInventoryNotice().Contains(TEXT("Perfil ocupado")));
+    return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6AmmoBoxTest,"Marau6.Inventory.AmmoBox",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FMarau6AmmoBoxTest::RunTest(const FString&)
+{
+    FUIWorld F;auto* Inv=F.C->GetInventory();
+    FMarau6Item Rifle=*Inv->ItemAt(10);Rifle.Id=FGuid::NewGuid();Rifle.Reserve=40;Rifle.Magazine=20;
+    FMarau6Item Box;Box.Id=FGuid::NewGuid();Box.Kind=static_cast<EMarau6ItemKind>(3);Box.Slot=8;
+    TestTrue(TEXT("Import ammunition fixture"),F.L->Import(Inv,FGuid::NewGuid(),{Rifle,Box}));
+    TestTrue(TEXT("Ammo can target equipped rifle"),FMarau6InventoryUIModel::MoveReason(Inv->GetSnapshot().Items,8,10,false).IsEmpty());
+    TestTrue(TEXT("Ammo consumed atomically"),F.L->Move(Inv,Box.Id,10));
+    TestNull(TEXT("Spent box removed"),Inv->ItemAt(8));TestEqual(TEXT("Reserve gains exactly20"),Inv->ItemAt(10)->Reserve,60);
+    TestEqual(TEXT("Magazine unchanged"),Inv->ItemAt(10)->Magazine,20);TestEqual(TEXT("Condition unchanged"),Inv->ItemAt(10)->Durability,7500);
+    TestFalse(TEXT("Consumed identity cannot replay"),F.L->Move(Inv,Box.Id,10));
+    const auto Rows=F.L->Export();const auto* Used=Rows.FindByPredicate([&](const auto& V){return V->AsObject()->GetStringField(TEXT("id"))==Box.Id.ToString(EGuidFormats::DigitsWithHyphensLower);});
+    TestTrue(TEXT("Consumption retains tombstone"),Used && (*Used)->AsObject()->GetStringField(TEXT("custody"))==TEXT("consumed"));
+    return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6AutomaticTest,"Marau6.Combat.AutomaticInput",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
+bool FMarau6AutomaticTest::RunTest(const FString&)
+{
+    FUIWorld F;
+    F.C->CloseInventoryFromUI();
+    const int32 Before=F.C->GetMagazineAmmo();F.C->StartAutomaticFire();
+    TestEqual(TEXT("First local shot accepted"),F.C->GetMagazineAmmo(),Before-1);
+    ++GFrameCounter;F.W->Tick(LEVELTICK_TimeOnly,.3f);F.W->GetTimerManager().Tick(.3f);F.C->DoFire();
+    TestEqual(TEXT("Continuous local input accepts next shot"),F.C->GetMagazineAmmo(),Before-2);
+    TestEqual(TEXT("Two shots wear exactly2 percent"),F.C->GetRifleDurability(),7300);
+    const int32 Left=F.C->GetMagazineAmmo();F.C->OpenInventoryResult();F.C->DoFire();
+    TestEqual(TEXT("Inventory blocks held fire"),F.C->GetMagazineAmmo(),Left);
+    F.C->CloseInventoryFromUI();++GFrameCounter;F.W->Tick(LEVELTICK_TimeOnly,.3f);F.C->DoFire();
+    TestEqual(TEXT("Closing UI cannot resume held fire"),F.C->GetMagazineAmmo(),Left);
+    F.C->StopAutomaticFire();F.C->StartAutomaticFire();TestEqual(TEXT("New press can fire"),F.C->GetMagazineAmmo(),Left-1);
     return true;
 }
 #endif

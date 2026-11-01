@@ -37,7 +37,8 @@ void AMarau6LootActor::OnRep_Item()
     Mesh->SetRelativeScale3D(Item.IsRifle()?FVector(.8):FVector(.35,.35,.25));
     Mesh->SetRelativeRotation(Item.IsRifle()?FRotator(0,-90,0):FRotator::ZeroRotator);
     Bounds->SetBoxExtent(Item.IsRifle()?FVector(60,30,20):FVector(30,30,20));
-    Label->SetText(FText::FromString(Item.Name()));
+    Label->SetText(FText::FromString(Item.IsAmmo()?TEXT("Municao | 20 balas"):Item.Name()));
+    if(Item.IsAmmo())Mesh->SetRelativeScale3D(FVector(.26,.20,.18));
 }
 void AMarau6LootActor::Consume() { if(HasAuthority()){SetActorHiddenInGame(true);SetActorEnableCollision(false);Destroy();} }
 void AMarau6LootActor::EndPlay(EEndPlayReason::Type Reason)

@@ -16,6 +16,7 @@ FString FMarau6InventoryUIModel::MoveReason(const TArray<FMarau6Item>& Items,int
     const auto* B=Items.FindByPredicate([D](const auto& I){return I.Slot==D;});
     if(!A)return TEXT("O item mudou de posicao; tente novamente.");
     if(S==D)return TEXT("Movimentacao cancelada.");
+    if(A->IsAmmo() && B && B->IsRifle())return B->Reserve<=Marau6Ammo::MaximumReserve-Marau6Ammo::BoxRounds?FString():TEXT("Reserva cheia: a caixa inteira precisa caber (limite 120).");
     auto Accepts=[](int32 Slot,const FMarau6Item& I){return Slot>=100 || Marau6Slots::Accepts(Slot,I);};
     if(!Accepts(D,*A))return Marau6Slots::IsSafe(D)?TEXT("Rifles nao cabem no safe pocket."):TEXT("O espaco de arma aceita somente rifles.");
     if(B && !Accepts(S,*B))return TEXT("Troca incompativel: os dois itens precisam caber nos destinos.");
@@ -24,8 +25,9 @@ FString FMarau6InventoryUIModel::MoveReason(const TArray<FMarau6Item>& Items,int
 FString FMarau6InventoryUIModel::Details(const FMarau6Item& I)
 {
     FString Info=I.Name()+TEXT("\n")+SlotName(I.Slot)+TEXT("\n\n");
-    if(I.IsRifle())return Info+FString::Printf(TEXT("Carregador: %d / 10\nReserva: %d\nDurabilidade: %.1f%%\n\n"),I.Magazine,I.Reserve,I.Durability/100.f)
-        +(I.Durability<=0?TEXT("Sem condicao de disparar.\n\n"):TEXT("Perde 2,5 pontos por disparo aceito.\n\n"))+TEXT("Recarregar nao repara.\nRifles nao cabem no safe pocket.");
+    if(I.IsRifle())return Info+FString::Printf(TEXT("Carregador: %d / 20\nReserva: %d\nDurabilidade: %.1f%%\n\n"),I.Magazine,I.Reserve,I.Durability/100.f)
+        +(I.Durability<=0?TEXT("Sem condicao de disparar.\n\n"):TEXT("Automatico: segure o botao de disparo. Perde 1 ponto por disparo aceito.\n\n"))+TEXT("Recarregar nao repara.\nRifles nao cabem no safe pocket.");
+    if(I.IsAmmo())return Info+TEXT("Caixa de 20 balas\n\nArraste sobre um rifle para abastecer sua reserva.\nLimite da reserva: 120 balas.\nA caixa e consumida inteira. Use R para carregar a arma.");
     if(I.Kind==EMarau6ItemKind::Supply)return Info+TEXT("Recupera ate 40 de vida\nTempo: 4 segundos\nUso unico\n\nUse na partida, parado no chao.\nMovimento ou dano interrompem a cura.\nVida cheia nao consome o item.");
     return Info+TEXT("Material coletavel\n\nPode ser guardado e extraido.\nSem uso de crafting neste prototipo.");
 }

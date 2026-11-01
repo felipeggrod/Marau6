@@ -83,6 +83,17 @@ void UMarau6Persistence::OnWorldBeginPlay(UWorld& World)
         const FVector P=It->GetActorLocation();O->SetNumberField(TEXT("x"),P.X);O->SetNumberField(TEXT("y"),P.Y);O->SetNumberField(TEXT("z"),P.Z);
         SeedTransforms.Add(MakeShared<FJsonValueObject>(O));
     }
+    // Supplement the authored arena with ammo near each original rifle seed.
+    // Cache these positions just like map loot so every round receives fresh GUIDs.
+    const int32 AuthoredSeeds=SeedTransforms.Num();
+    for(int32 N=0;N<AuthoredSeeds;N++)
+    {
+        auto Source=SeedTransforms[N]->AsObject();if(Source->GetIntegerField(TEXT("kind"))!=0)continue;
+        const FVector Position(Source->GetNumberField(TEXT("x")),Source->GetNumberField(TEXT("y"))+100,Source->GetNumberField(TEXT("z")));
+        auto Seed=MakeShared<FJsonObject>();Seed->SetNumberField(TEXT("kind"),3);Seed->SetNumberField(TEXT("x"),Position.X);Seed->SetNumberField(TEXT("y"),Position.Y);Seed->SetNumberField(TEXT("z"),Position.Z);SeedTransforms.Add(MakeShared<FJsonValueObject>(Seed));
+        const FTransform Transform(FRotator::ZeroRotator,Position);auto* Box=World.SpawnActorDeferred<AMarau6LootActor>(AMarau6LootActor::StaticClass(),Transform);
+        if(Box){World.GetSubsystem<UMarau6ItemLedger>()->RegisterSeed(Box,EMarau6ItemKind::Ammo);Box->FinishSpawning(Transform);}
+    }
     if(FPaths::FileExists(JournalPath))
     {
         if(!FFileHelper::LoadFileToString(Text,*JournalPath)){Fail(TEXT("Nao foi possivel ler o diario; entrada bloqueada"));return;}

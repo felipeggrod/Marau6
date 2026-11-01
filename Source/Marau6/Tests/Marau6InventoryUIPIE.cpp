@@ -11,6 +11,12 @@
 #include "Marau6Persistence.h"
 #include "Marau6InventoryComponent.h"
 #include "Marau6ItemLedger.h"
+#include "Marau6LootActor.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputActionValue.h"
+#include "UObject/UnrealType.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "Engine/Engine.h"
 #include "Engine/DamageEvents.h"
@@ -44,7 +50,7 @@ class FInventoryPIEFlow : public IAutomationLatentCommand
 {
     TSharedPtr<FInventoryPIEData> D;
     int32 Phase=0;double Started=FPlatformTime::Seconds(),At=Started,NextRequest=0;
-    FGuid Rifle;FString Round;FMarau6InventoryUIRequest OldBase;
+    FGuid Rifle,AmmoBox;int32 AmmoPhase=0;double AmmoAt=0;FString Round;FMarau6InventoryUIRequest OldBase;
     bool Render=false;
     void Next(){UE_LOG(LogTemp,Display,TEXT("MARAU6_UI_PIE phase %d passed"),Phase);++Phase;At=FPlatformTime::Seconds();NextRequest=0;}
     bool Move(AMarau6PlayerController* PC,int32 Source,int32 Destination)
@@ -148,13 +154,58 @@ public:
         if(Phase==10)
         {
             if(Local[0]->InventoryRequestPending() || !CA->GetInventory()->ItemAt(10) || CA->GetInventory()->ItemAt(10)->Id!=Rifle)return false;
-            D->Test->TestEqual(TEXT("UI moves preserve ammo"),A->GetMagazineAmmo(),10);D->Test->TestEqual(TEXT("UI moves preserve condition"),A->GetRifleDurability(),10000);
+            if(AmmoPhase==0)
+            {
+                auto* Input=Cast<UEnhancedInputComponent>(CA->InputComponent);bool Bound=false;
+                const auto* FireField=FindFProperty<FObjectProperty>(AMarau6Character::StaticClass(),TEXT("PrototypeFireAction"));
+                auto* Action=FireField?FireField->GetObjectPropertyValue_InContainer(CA):nullptr;
+                if(Input)for(const auto& Binding:Input->GetActionEventBindings())if(Binding->GetAction()==Action && Binding->GetTriggerEvent()==ETriggerEvent::Triggered)Bound=true;
+                D->Test->TestTrue(TEXT("Real local player binds continuous fire"),Bound);
+                CA->ToggleInventoryFromUI();Local[0]->UpdateInventoryUI();Local[0]->SetControlRotation(FRotator(75,90,0));Remote[0]->SetControlRotation(FRotator(75,90,0));
+                AmmoPhase=-2;AmmoAt=Now;return false;
+            }
+            if(AmmoPhase==-2)
+            {
+                if(A->GetMagazineAmmo()<=16){AmmoPhase=-1;AmmoAt=Now;return false;}
+                const auto* Field=FindFProperty<FObjectProperty>(AMarau6Character::StaticClass(),TEXT("PrototypeFireAction"));
+                auto* Action=Cast<UInputAction>(Field->GetObjectPropertyValue_InContainer(CA));
+                if(auto* Subsystem=ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(Local[0]->GetLocalPlayer()))Subsystem->InjectInputForAction(Action,FInputActionValue(true),{}, {});
+                return false;
+            }
+            if(AmmoPhase==-1)
+            {
+                if(Now-AmmoAt<.7 || !Bridge->IsSettled())return false;
+                D->Test->TestEqual(TEXT("Held input fires four rounds and release stops"),A->GetMagazineAmmo(),16);D->Test->TestEqual(TEXT("Automatic four shots cost4 percent"),A->GetRifleDurability(),9600);
+                CA->ToggleInventoryFromUI();Local[0]->UpdateInventoryUI();AmmoPhase=3;
+            }
+            if(AmmoPhase==3)
+            {
+                AMarau6LootActor* Box=nullptr;for(TActorIterator<AMarau6LootActor> It(Server);It;++It)if(It->GetItem().IsAmmo()){Box=*It;break;}
+                if(!Box){D->Test->AddError(TEXT("Arena must generate ammunition loot"));return true;}
+                AmmoBox=Box->GetItem().Id;A->SetActorLocation(Box->GetActorLocation()+FVector(-120,0,71));A->GetCharacterMovement()->StopMovementImmediately();
+                AmmoAt=Now;AmmoPhase=1;return false;
+            }
+            if(AmmoPhase==1)
+            {
+                const auto* Owned=CA->GetInventory()->GetSnapshot().Items.FindByPredicate([this](const auto& I){return I.Id==AmmoBox;});
+                if(!Owned)
+                {
+                    if(Now-AmmoAt<.5 || Now<NextRequest)return false;
+                    for(TActorIterator<AMarau6LootActor> It(Clients[0]);It;++It)if(It->GetItem().Id==AmmoBox)
+                    {auto Aim=(It->GetActorLocation()-CA->GetPawnViewLocation()).Rotation();Local[0]->SetControlRotation(Aim);Remote[0]->SetControlRotation(Aim);CA->GetInventory()->ServerPickup(*It,AmmoBox);}
+                    NextRequest=Now+.5;return false;
+                }
+                Screenshot(Local[0],TEXT("inventory-ui-ammo.png"));
+                if(!Move(Local[0],Owned->Slot,10)){D->Test->AddError(TEXT("Ammo drag failed"));return true;}AmmoPhase=2;return false;
+            }
+            if(Local[0]->InventoryRequestPending() || CA->GetReserveAmmo()!=60 || !Bridge->IsSettled())return false;
+            D->Test->TestFalse(TEXT("Consumed box disappears on owning client"),CA->GetInventory()->GetSnapshot().Items.ContainsByPredicate([this](const auto& I){return I.Id==AmmoBox;}));
             B->TakeDamage(100,FDamageEvent(),Remote[0],A);A->SetActorLocation(FVector(1400,0,96));A->GetCharacterMovement()->StopMovementImmediately();Next();return false;
         }
         if(Phase==11)
         {
             if(Remote[0]->IsInRaid() || Remote[1]->IsInRaid() || !Bridge->IsSettled() || !Local[0]->InventoryUIItemAt(10))return false;
-            D->Test->TestEqual(TEXT("Extracted rifle in base retains identity"),Local[0]->InventoryUIItemAt(10)->Id,Rifle);Local[0]->ServerNextRound();Next();return false;
+            D->Test->TestEqual(TEXT("Extracted rifle reserve retains box rounds"),Local[0]->InventoryUIItemAt(10)->Reserve,60);D->Test->TestEqual(TEXT("Extracted rifle in base retains identity"),Local[0]->InventoryUIItemAt(10)->Id,Rifle);Local[0]->ServerNextRound();Next();return false;
         }
         if(Phase==12)
         {

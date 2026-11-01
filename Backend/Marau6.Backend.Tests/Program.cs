@@ -8,6 +8,7 @@ using System.Text.Json.Nodes;
 
 // Integration contract against a real API/PostgreSQL instance. Profiles are fixed;
 // tests use an isolated database configured by the test launcher, never the play database.
+AmmoContracts.Run();
 var client = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:5187") };
 client.DefaultRequestHeaders.Add("X-Marau6-Key", Environment.GetEnvironmentVariable("MARAU6_API_KEY") ?? "missing");
 int passed = 0;
@@ -40,7 +41,7 @@ var a = await Get(1); var b = await Get(2);
 Check(Items(a).Count == 5, "initial grant once");
 Check(Items(await Get(1)).Count == 5, "read does not grant again");
 var rifle = Items(a).First(x => x!["slot"]!.GetValue<int>() == 10)!;
-Check(rifle["durability"]?.GetValue<int>() == 10000 && rifle["reserve"]!.GetValue<int>() == 40, "new rifle full condition and 10/40");
+Check(rifle["durability"]?.GetValue<int>() == 10000 && rifle["reserve"]!.GetValue<int>() == 40, "new rifle full condition and 20/40");
 var op = Guid.NewGuid();
 var move = new { operationId = op, profile = 1, revision = Rev(a), item = Id(rifle), destination = 105 };
 a = await Post("/move", move);
@@ -224,5 +225,33 @@ var restartBody=new {operationId=Guid.NewGuid(),profile=1,revision=Rev(a),item=I
 var restartResult=await Post("/move",restartBody);
 var replayFile=Environment.GetEnvironmentVariable("MARAU6_REPLAY_FILE");
 if(replayFile!=null)await File.WriteAllTextAsync(replayFile,System.Text.Json.JsonSerializer.Serialize(new {body=restartBody,response=restartResult}));
+// Real HTTP ammunition lifecycle: world -> inventory -> consumed -> extraction -> base.
+var ammoProfile=await Get(1);var ammoRaid=Guid.NewGuid();
+await Post("/raids/open",new{operationId=Guid.NewGuid(),raidId=ammoRaid});
+await Post("/raids/enter",new{operationId=Guid.NewGuid(),raidId=ammoRaid,profile=1,revision=Rev(ammoProfile)});
+var ammoState=(await client.GetFromJsonAsync<JsonObject>($"/raids/{ammoRaid}"))!;var ammoItems=ammoState["items"]!.AsArray();
+var ammoOwner=ammoProfile["id"]!.GetValue<string>();var gunId=Guid.NewGuid();var boxId=Guid.NewGuid();var spareBox=Guid.NewGuid();
+var gunNode=JsonSerializerNode(new{id=gunId,kind=0,slot=-1,magazine=20,reserve=40,durability=10000,owner="",custody="world"});
+var boxNode=JsonSerializerNode(new{id=boxId,kind=3,slot=-1,magazine=0,reserve=0,owner="",custody="world"});
+var spareNode=JsonSerializerNode(new{id=spareBox,kind=3,slot=-1,magazine=0,reserve=0,owner="",custody="world"});
+ammoItems.Add(gunNode);ammoItems.Add(boxNode);ammoItems.Add(spareNode);
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=ammoRaid,sequence=1,items=ammoItems,results=Array.Empty<object>()});
+var freeSlots=Enumerable.Range(0,8).Where(slot=>!ammoItems.Any(i=>i!["owner"]!.GetValue<string>()==ammoOwner && i["slot"]!.GetValue<int>()==slot)).Take(3).ToArray();
+foreach(var pair in new[]{(gunNode,freeSlots[0]),(boxNode,freeSlots[1]),(spareNode,freeSlots[2])}){pair.Item1["owner"]=ammoOwner;pair.Item1["custody"]="inventory";pair.Item1["slot"]=pair.Item2;}
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=ammoRaid,sequence=2,items=ammoItems,results=Array.Empty<object>()});
+gunNode["reserve"]=60;
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=ammoRaid,sequence=3,items=ammoItems,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+Consumed(boxNode);var ammoConsume=new{operationId=Guid.NewGuid(),raidId=ammoRaid,sequence=3,items=ammoItems,results=Array.Empty<object>()};
+await Post("/raids/snapshot",ammoConsume);await Post("/raids/snapshot",ammoConsume);Check(true,"ammo reserve increase paid exactly once by consumed box");
+var badAmmo=ammoItems.DeepClone().AsArray();var revivedBox=badAmmo.Single(x=>Id(x!)==boxId.ToString())!;revivedBox["custody"]="inventory";revivedBox["owner"]=ammoOwner;revivedBox["slot"]=freeSlots[1];
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=ammoRaid,sequence=4,items=badAmmo,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+foreach(var n in ammoItems.Where(x=>x!["owner"]!.GetValue<string>()==ammoOwner))n!["custody"]="result";
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=ammoRaid,sequence=4,items=ammoItems,results=new[]{new{profile=1,outcome="extracted"}}});
+await Post("/raids/close",new{operationId=Guid.NewGuid(),raidId=ammoRaid});
+ammoProfile=await Get(1);var baseAmmoBody=new{operationId=Guid.NewGuid(),profile=1,revision=Rev(ammoProfile),item=spareBox,destination=freeSlots[0]};
+var ammoResponse=await Post("/move",baseAmmoBody);var ammoReplay=await Post("/move",baseAmmoBody);
+Check(Rev(ammoResponse)==Rev(ammoReplay) && Items(ammoResponse).Single(x=>Id(x!)==gunId.ToString())!["reserve"]!.GetValue<int>()==80 && !Items(ammoResponse).Any(x=>Id(x!)==spareBox.ToString()),"base ammo drag consumes once and preserves rifle identity");
+await Post("/move",new{operationId=Guid.NewGuid(),profile=1,revision=Rev(ammoResponse),item=spareBox,destination=freeSlots[0]},HttpStatusCode.Conflict);
+var ammoReport=Environment.GetEnvironmentVariable("MARAU6_AMMO_REPORT");if(ammoReport!=null)await File.WriteAllTextAsync(ammoReport,JsonSerializer.Serialize(new{body=baseAmmoBody,response=ammoResponse,rifle=gunId,consumed=spareBox,profile=1}));
 Console.WriteLine($"ALL {passed} CONTRACT ASSERTIONS PASSED");
 static JsonObject JsonSerializerNode(object value)=>System.Text.Json.JsonSerializer.SerializeToNode(value)!.AsObject();

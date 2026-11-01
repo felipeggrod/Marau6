@@ -141,8 +141,10 @@ void AMarau6Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
                     UInputAction* HealAction=NewObject<UInputAction>(this,FName(TEXT("ItemHeal")));HealAction->ValueType=EInputActionValueType::Boolean;
                     PrototypeFireMapping->MapKey(HealAction,EKeys::H);EnhancedInputComponent->BindAction(HealAction,ETriggerEvent::Started,Healing.Get(),&UMarau6HealingComponent::UseSelected);
                     Subsystem->AddMappingContext(PrototypeFireMapping, 1);
-                    EnhancedInputComponent->BindAction(PrototypeFireAction, ETriggerEvent::Started,
-                        this, &AMarau6Character::DoFire);
+                    EnhancedInputComponent->BindAction(PrototypeFireAction,ETriggerEvent::Started,this,&AMarau6Character::StartAutomaticFire);
+                    EnhancedInputComponent->BindAction(PrototypeFireAction,ETriggerEvent::Triggered,this,&AMarau6Character::DoFire);
+                    EnhancedInputComponent->BindAction(PrototypeFireAction,ETriggerEvent::Completed,this,&AMarau6Character::StopAutomaticFire);
+                    EnhancedInputComponent->BindAction(PrototypeFireAction,ETriggerEvent::Canceled,this,&AMarau6Character::StopAutomaticFire);
                 }
             }
         }
@@ -297,10 +299,19 @@ void AMarau6Character::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 }
 
+void AMarau6Character::StartAutomaticFire()
+{
+    bFireNeedsRelease=bInventoryOpen || !CanParticipate() || Healing->IsHealing();
+    DoFire();
+}
+void AMarau6Character::StopAutomaticFire(){bFireNeedsRelease=false;}
 void AMarau6Character::DoFire()
 {
+    if(bInventoryOpen || !CanParticipate() || Healing->IsHealing()){bFireNeedsRelease=true;return;}
+    if(bFireNeedsRelease || !GetWorld() || GetWorld()->GetTimeSeconds()<NextLocalFireTime)return;
     if (IsLocallyControlled() && CanParticipate() && HasEquippedRifle() && !Healing->IsHealing() && !bInventoryOpen && !IsReloading() && GetMagazineAmmo() > 0 && GetRifleDurability() > 0)
     {
+        NextLocalFireTime=GetWorld()->GetTimeSeconds()+PrototypeFireInterval;
         ServerFire();
     }
 }
@@ -559,7 +570,7 @@ void AMarau6Character::InventoryShortcut(FKey Key)
 }
 void AMarau6Character::ToggleInventory()
 {
-    if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;InventoryMoveSource.Invalidate();}
+    if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;if(bInventoryOpen)bFireNeedsRelease=true;InventoryMoveSource.Invalidate();}
 }
 void AMarau6Character::ConfirmInventoryMove()
 {
@@ -669,4 +680,9 @@ bool AMarau6Character::SetAtBase(bool bValue)
     }
     bAtBase=bValue;CancelReload();
     OnRep_AtBase();if(!bAtBase)OnInventoryChanged(true);ForceNetUpdate();return true;
+}
+void AMarau6Character::RefreshEquippedAmmo()
+{
+    if(!HasAuthority())return;
+    if(const auto* I=Inventory->ItemAt(Marau6Slots::Weapon)){AmmoState.Magazine=I->Magazine;AmmoState.Reserve=I->Reserve;ForceNetUpdate();}
 }

@@ -5,6 +5,7 @@
 #include "Marau6InventoryComponent.h"
 #include "Marau6LootActor.h"
 #include "Marau6Character.h"
+#include "Marau6HealingComponent.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -44,14 +45,14 @@ FGuid UMarau6ItemLedger::RegisterInventory(UMarau6InventoryComponent* C)
     if(!IsServer() || !IsValid(C)) return FGuid();
     const FGuid Owner=FGuid::NewGuid(); Owners.Add(Owner,C);
     FMarau6ItemRecord R; R.Item.Id=FGuid::NewGuid(); R.Item.Kind=EMarau6ItemKind::Rifle;
-    R.Item.Slot=Marau6Slots::Weapon; R.Item.Magazine=10; R.Item.Reserve=40; R.OwnerId=Owner;
+    R.Item.Slot=Marau6Slots::Weapon; R.Item.Magazine=20; R.Item.Reserve=40; R.OwnerId=Owner;
     Records.Add(R.Item.Id,R); return Owner;
 }
 void UMarau6ItemLedger::RegisterSeed(AMarau6LootActor* Actor,EMarau6ItemKind Kind)
 {
     if(!IsServer() || !IsValid(Actor) || Actor->GetItem().Id.IsValid()) return;
     FMarau6ItemRecord R; R.Item.Id=FGuid::NewGuid(); R.Item.Kind=Kind;
-    if(R.Item.IsRifle()){R.Item.Magazine=10;R.Item.Reserve=40;}
+    if(R.Item.IsRifle()){R.Item.Magazine=20;R.Item.Reserve=40;}
     R.Custody=EMarau6Custody::World; R.Loot=Actor; Records.Add(R.Item.Id,R); Actor->SetItem(R.Item);
 }
 bool UMarau6ItemLedger::Pickup(UMarau6InventoryComponent* C,AMarau6LootActor* Actor,FGuid Expected)
@@ -76,8 +77,21 @@ bool UMarau6ItemLedger::Pickup(UMarau6InventoryComponent* C,AMarau6LootActor* Ac
 bool UMarau6ItemLedger::Move(UMarau6InventoryComponent* C,FGuid Expected,int32 Destination)
 {
     if(!Usable(C)) return false;
-    auto* R=Owned(C,Expected); if(!R || R->Item.Slot==Destination || !Marau6Slots::Accepts(Destination,R->Item)) return false;
+    auto* R=Owned(C,Expected); if(!R || R->Item.Slot==Destination) return false;
     auto* Other=At(C->GetSessionInventoryId(),Destination);
+    if(R->Item.IsAmmo() && Other && Other->Item.IsRifle())
+    {
+        auto* Pawn=C->Character();
+        if(Other->Custody!=EMarau6Custody::Inventory || Other->Item.Reserve>Marau6Ammo::MaximumReserve-Marau6Ammo::BoxRounds ||
+           Pawn->GetHealing()->IsHealing() || (Destination==Marau6Slots::Weapon && Pawn->IsReloading()))return false;
+        const auto Before=*R;const auto RifleBefore=Other->Item;
+        R->Custody=EMarau6Custody::Consumed;R->OwnerId.Invalidate();R->Item.Slot=INDEX_NONE;R->Loot.Reset();
+        Other->Item.Reserve+=Marau6Ammo::BoxRounds;
+        if(!Persist()){*R=Before;Other->Item=RifleBefore;return false;}
+        Sync(C->GetSessionInventoryId());
+        Pawn->RefreshEquippedAmmo();return true;
+    }
+    if(!Marau6Slots::Accepts(Destination,R->Item))return false;
     const int32 Source=R->Item.Slot;
     if(Other && (Other->Custody!=EMarau6Custody::Inventory || !Marau6Slots::Accepts(Source,Other->Item))) return false;
     if(Source==Marau6Slots::Weapon || Destination==Marau6Slots::Weapon) C->Character()->CancelReload();
@@ -153,7 +167,7 @@ bool UMarau6ItemLedger::SaveShot(UMarau6InventoryComponent* C)
     auto* R=At(C->GetSessionInventoryId(),Marau6Slots::Weapon);
     if(!R || R->Custody!=EMarau6Custody::Inventory || !R->Item.IsRifle() || R->Item.Durability<=0 || R->Item.Magazine<=0)return false;
     const FMarau6Item Before=R->Item;
-    --R->Item.Magazine;R->Item.Durability=FMath::Max(0,R->Item.Durability-250);
+    --R->Item.Magazine;R->Item.Durability=FMath::Max(0,R->Item.Durability-Marau6Ammo::ShotWear);
     if(!Persist()){R->Item=Before;return false;}
     Sync(C->GetSessionInventoryId());return true;
 }
@@ -163,7 +177,7 @@ bool UMarau6ItemLedger::SaveAmmo(UMarau6InventoryComponent* C,int32 Magazine,int
     if(auto* R=At(C->GetSessionInventoryId(),Marau6Slots::Weapon))
     {
         const auto Before=R->Item;
-        R->Item.Magazine=FMath::Clamp(Magazine,0,10);R->Item.Reserve=FMath::Clamp(Reserve,0,40);
+        R->Item.Magazine=FMath::Clamp(Magazine,0,Marau6Ammo::Magazine);R->Item.Reserve=FMath::Clamp(Reserve,0,Marau6Ammo::MaximumReserve);
         if(!Persist()){R->Item=Before;return false;}
         Sync(C->GetSessionInventoryId());return true;
     }
@@ -320,12 +334,12 @@ bool UMarau6ItemLedger::FinalizeDisconnected(FGuid Owner,FVector Location)
 
 bool UMarau6ItemLedger::GrantWorld(FGuid Id,EMarau6ItemKind Kind,FVector Location)
 {
-    if(!IsServer() || !Id.IsValid() || Location.ContainsNaN() || static_cast<uint8>(Kind)>static_cast<uint8>(EMarau6ItemKind::Scrap))return false;
+    if(!IsServer() || !Id.IsValid() || Location.ContainsNaN() || static_cast<uint8>(Kind)>static_cast<uint8>(EMarau6ItemKind::Ammo))return false;
     if(const auto* Existing=Records.Find(Id))return Existing->Item.Kind==Kind;
     if(UMarau6Persistence::UsesPersistentBase(GetWorld()))
     {auto* Bridge=GetWorld()->GetSubsystem<UMarau6Persistence>();if(!Bridge || !Bridge->CanMutate())return false;}
     FMarau6ItemRecord Record;Record.Item.Id=Id;Record.Item.Kind=Kind;Record.Item.Slot=INDEX_NONE;
-    if(Record.Item.IsRifle()){Record.Item.Magazine=10;Record.Item.Reserve=40;}
+    if(Record.Item.IsRifle()){Record.Item.Magazine=20;Record.Item.Reserve=40;}
     Record.Custody=EMarau6Custody::Recovery;Record.RecoveryLocation=Location;
     Records.Add(Id,Record);
     // Durable before visible. Recovery and world actors have the same exported custody.

@@ -35,6 +35,7 @@ private:
     friend class FMarau6BotDurabilityTest;
     friend class FMarau6HealingDurabilityTest;
     friend class FMarau6WearJournalTest;
+    friend class FMarau6AmmoRollbackTest;
     struct FCommand
     {
         FString Path,Body;

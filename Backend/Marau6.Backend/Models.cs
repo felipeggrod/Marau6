@@ -40,6 +40,7 @@ public sealed class Raid
 public sealed class State
 {
     public List<Profile> Profiles { get; set; } = [];
+    public HashSet<Guid> ConsumedItems { get; set; } = [];
     public List<Raid> Raids { get; set; } = [];
 }
 public record MoveCommand(Guid OperationId, int Profile, int Revision, Guid Item, int Destination);
