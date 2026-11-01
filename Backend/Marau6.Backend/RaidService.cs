@@ -31,7 +31,7 @@ public static class RaidService
         {
             Require(ids.TryGetValue(old.Id, out var next), "Snapshot não pode apagar identidades");
             Require(next!.Kind == old.Kind, "Tipo de item imutável");
-            if (old.Custody == "result") Require(Same(old, next), "Resultado confirmado é imutável");
+            if (old.Custody is "result" or "consumed") Require(Same(old, next), "Resultado ou consumo confirmado é imutável");
         }
         var activeOwners = r.Participants.Where(x => x.Outcome == "active").Select(x => Profiles.Get(s, x.Profile).Id.ToString()).ToHashSet();
         var known = r.Items.Select(x => x.Id).ToHashSet();
@@ -40,7 +40,15 @@ public static class RaidService
         {
             Require(i.Id != Guid.Empty && i.Kind is >= 0 and <= 2 && i.Magazine is >= 0 and <= 10 && i.Reserve is >= 0 and <= 30, "Dados de item inválidos");
             Require(i.Kind == 0 || i.Magazine == 0 && i.Reserve == 0, "Munição em item incompatível");
-            Require(i.Custody is "world" or "recovery" or "inventory" or "result", "Custódia inválida");
+            Require(i.Custody is "world" or "recovery" or "inventory" or "result" or "consumed", "Custódia inválida");
+            if(i.Custody=="consumed")
+            {
+                var previous=r.Items.SingleOrDefault(x=>x.Id==i.Id);
+                Require(i.Kind==1 && previous!=null &&
+                    (previous.Custody=="consumed" && Same(previous,i) ||
+                     previous.Custody=="inventory" && activeOwners.Contains(previous.Owner) && previous.Slot is >=0 and <10),
+                    "Consumo exige suprimento de inventário ativo");
+            }
             if (!known.Contains(i.Id))
             {
                 Require(i.Owner == "" && i.Custody is "world" or "recovery", "Novo loot deve nascer no mundo");

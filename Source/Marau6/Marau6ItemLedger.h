@@ -6,7 +6,7 @@
 #include "Marau6ItemLedger.generated.h"
 class UMarau6InventoryComponent;
 class AMarau6LootActor;
-enum class EMarau6Custody : uint8 { Inventory, World, Result, Recovery, Transfer };
+enum class EMarau6Custody : uint8 { Inventory, World, Result, Recovery, Transfer, Consumed };
 struct FMarau6ItemRecord
 {
     FMarau6Item Item;
@@ -34,6 +34,7 @@ public:
     bool Pickup(UMarau6InventoryComponent* Component, AMarau6LootActor* Actor, FGuid Expected);
     bool Move(UMarau6InventoryComponent* Component, FGuid Expected, int32 Destination);
     bool Drop(UMarau6InventoryComponent* Component, FGuid Expected);
+    bool ConsumeForHealing(UMarau6InventoryComponent* Component,FGuid Id);
     bool SaveAmmo(UMarau6InventoryComponent* Component, int32 Magazine, int32 Reserve);
     bool Finalize(UMarau6InventoryComponent* Component, bool bExtracted);
     void LootRemoved(AMarau6LootActor* Actor, FGuid Id);

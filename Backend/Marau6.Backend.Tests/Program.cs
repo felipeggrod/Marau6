@@ -118,6 +118,65 @@ foreach(var i in fourthItems.Where(x=>x!["owner"]!.GetValue<string>()==ownerB)){
 await Post("/raids/snapshot",new {operationId=Guid.NewGuid(),raidId=raid4,sequence=2,items=fourthItems,results=new[]{new{profile=2,outcome="eliminated"}}});
 Check(Items(await Get(1)).Count==Items(a).Count,"separate later elimination preserves earlier extraction");
 await Post("/raids/close",new {operationId=Guid.NewGuid(),raidId=raid4});
+// Healing consumption is a terminal identity, never an omitted snapshot record.
+a=await Get(1);
+var kits=Items(a).Where(x=>x!["kind"]!.GetValue<int>()==1).Take(2).Select(x=>Id(x!)).ToArray();
+var healingScrap=Id(Items(a).First(x=>x!["kind"]!.GetValue<int>()==2)!);
+for(int n=0;n<2;n++)
+{
+    var kit=Items(a).Single(x=>Id(x!)==kits[n])!;
+    if(kit["slot"]!.GetValue<int>()!=8+n)a=await Post("/move",new{operationId=Guid.NewGuid(),profile=1,revision=Rev(a),item=kits[n],destination=8+n});
+}
+if(Items(a).Single(x=>Id(x!)==healingScrap)!["slot"]!.GetValue<int>()!=0)
+    a=await Post("/move",new{operationId=Guid.NewGuid(),profile=1,revision=Rev(a),item=healingScrap,destination=0});
+var healingRaid=Guid.NewGuid();
+await Post("/raids/open",new{operationId=Guid.NewGuid(),raidId=healingRaid});
+await Post("/raids/enter",new{operationId=Guid.NewGuid(),raidId=healingRaid,profile=1,revision=Rev(a)});
+var healingState=(await client.GetFromJsonAsync<JsonObject>($"/raids/{healingRaid}"))!;
+var healingItems=healingState["items"]!.AsArray();
+var groundKit=Guid.NewGuid();
+healingItems.Add(JsonSerializerNode(new{id=groundKit,kind=1,slot=-1,magazine=0,reserve=0,owner="",custody="world"}));
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=1,items=healingItems,results=Array.Empty<object>()});
+JsonArray CopyHealing()=>healingItems.DeepClone().AsArray();
+void Consumed(JsonNode item){item["custody"]="consumed";item["owner"]="";item["slot"]=-1;}
+var badHeal=CopyHealing();Consumed(badHeal.Single(x=>Id(x!)==healingScrap)!);
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=2,items=badHeal,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+badHeal=CopyHealing();Consumed(badHeal.Single(x=>Id(x!)==groundKit.ToString())!);
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=2,items=badHeal,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+badHeal=CopyHealing();badHeal.Add(JsonSerializerNode(new{id=Guid.NewGuid(),kind=1,slot=-1,magazine=0,reserve=0,owner="",custody="consumed"}));
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=2,items=badHeal,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+Check(true,"consumption rejects scrap, world item and new consumed identity");
+var consumedKit=healingItems.Single(x=>Id(x!)==kits[0])!;Consumed(consumedKit);
+var consumeOp=Guid.NewGuid();
+var consumeCommand=new{operationId=consumeOp,raidId=healingRaid,sequence=2,items=healingItems,results=Array.Empty<object>()};
+await Post("/raids/snapshot",consumeCommand);
+await Post("/raids/snapshot",consumeCommand);
+Check(true,"owned safe supply consumption accepted once with idempotent receipt");
+badHeal=CopyHealing();var restored=badHeal.Single(x=>Id(x!)==kits[0])!;restored["custody"]="inventory";restored["owner"]=ownerA;restored["slot"]=8;
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=3,items=badHeal,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+badHeal=CopyHealing();badHeal.Remove(badHeal.Single(x=>Id(x!)==kits[0]));
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=3,items=badHeal,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+Check(true,"consumed identity cannot be resurrected or omitted");
+foreach(var node in healingItems.Where(x=>x!["custody"]!.GetValue<string>()=="inventory"))
+{
+    if(node!["slot"]!.GetValue<int>()==9)node["custody"]="result";
+    else{node["custody"]="world";node["owner"]="";node["slot"]=-1;}
+}
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=3,items=healingItems,results=new[]{new{profile=1,outcome="eliminated"}}});
+a=await Get(1);
+Check(!Items(a).Any(x=>Id(x!)==kits[0]) && Items(a).Any(x=>Id(x!)==kits[1]),"death preserves unused safe supply without restoring consumed kit");
+badHeal=CopyHealing();Consumed(badHeal.Single(x=>Id(x!)==kits[1])!);
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=healingRaid,sequence=4,items=badHeal,results=Array.Empty<object>()},HttpStatusCode.Conflict);
+Check(true,"confirmed result cannot be consumed afterward");
+await Post("/raids/close",new{operationId=Guid.NewGuid(),raidId=healingRaid});
+var afterHealing=Guid.NewGuid();await Post("/raids/open",new{operationId=Guid.NewGuid(),raidId=afterHealing});
+var resurrected=JsonSerializerNode(new{id=kits[0],kind=1,slot=-1,magazine=0,reserve=0,owner="",custody="world"});
+await Post("/raids/snapshot",new{operationId=Guid.NewGuid(),raidId=afterHealing,sequence=1,items=new[]{resurrected},results=Array.Empty<object>()},HttpStatusCode.Conflict);
+Check(true,"new raid cannot reuse consumed historical identity");
+await Post("/raids/close",new{operationId=Guid.NewGuid(),raidId=afterHealing});
+var healingReport=Environment.GetEnvironmentVariable("MARAU6_HEALING_REPORT");
+if(healingReport!=null)await File.WriteAllTextAsync(healingReport,System.Text.Json.JsonSerializer.Serialize(new{raid=healingRaid,item=kits[0],profile=1}));
+
 // Save a replay contract for the launcher to verify after restarting the backend.
 a=await Get(1);
 var restartBody=new {operationId=Guid.NewGuid(),profile=1,revision=Rev(a),item=Id(Items(a).First()!),destination=120};

@@ -10,6 +10,7 @@
 #include "Marau6Character.generated.h"
 
 class UMarau6InventoryComponent;
+class UMarau6HealingComponent;
 class UMarau6ItemLedger;
 class AMarau6ExtractionZone;
 class UInputComponent;
@@ -124,6 +125,8 @@ protected:
     UPROPERTY(ReplicatedUsing=OnRep_AtBase) bool bAtBase=false;
     UFUNCTION() void OnRep_AtBase();
     friend class UMarau6ItemLedger;
+    friend class UMarau6HealingComponent;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6HealingComponent> Healing;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6InventoryComponent> Inventory;
     bool bInventoryOpen=false;
     int32 SelectedInventorySlot=0;
@@ -176,6 +179,7 @@ public:
 	AMarau6Character();
     virtual void Tick(float DeltaSeconds) override;
     UMarau6InventoryComponent* GetInventory() const { return Inventory; }
+    UMarau6HealingComponent* GetHealing() const { return Healing; }
     bool HasEquippedRifle() const;
     bool IsInventoryOpen() const { return bInventoryOpen; }
     void ConfirmInventoryMove();

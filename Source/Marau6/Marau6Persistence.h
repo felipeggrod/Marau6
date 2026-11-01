@@ -33,6 +33,7 @@ public:
     const FString& GetStatus() const { return Status; }
 private:
     friend class FMarau6BotDurabilityTest;
+    friend class FMarau6HealingDurabilityTest;
     struct FCommand
     {
         FString Path,Body;
