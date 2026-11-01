@@ -14,6 +14,7 @@ void AMarau6PrototypeHUD::DrawHUD()
     Super::DrawHUD();
     if (!Canvas || !PlayerOwner) return;
     const auto* BasePC=Cast<AMarau6PlayerController>(PlayerOwner);
+    if(BasePC && BasePC->IsUsingBase() && !BasePC->IsInRaid() && BasePC->HasInventoryWidget())return;
     if(BasePC && BasePC->IsUsingBase() && !BasePC->IsInRaid())
     {
         DrawRect(FLinearColor(.025f,.035f,.045f,.98f),0,0,Canvas->ClipX,Canvas->ClipY);
@@ -122,7 +123,7 @@ void AMarau6PrototypeHUD::DrawHUD()
             DrawText(Prompt,FLinearColor::Yellow,Canvas->ClipX*.5f-90,Canvas->ClipY*.65f,GEngine->GetMediumFont(),1);
         }
     }
-    if(Character->IsInventoryOpen())
+    if(Character->IsInventoryOpen() && !(BasePC && BasePC->HasInventoryWidget()))
     {
         const float Left=FMath::Max(12.f,Canvas->ClipX-380.f), Top=205.f;
         DrawRect(FLinearColor(0,0,0,.85f),Left,Top,365,420);

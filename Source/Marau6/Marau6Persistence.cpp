@@ -144,8 +144,18 @@ void UMarau6Persistence::Pump()
         const int32 Code=Response.IsValid()?Response->GetResponseCode():0;
         if(!bSuccess || Code>=500 || Code==0)
         {Retry=2;Status=TEXT("Backend indisponivel; operacoes registradas aguardam confirmacao");return;}
+        LastCommandError.Empty();
         if(Code!=200)
         {
+            auto Error=Parse(Response->GetContentAsString());FString Reason;
+            if(Error && Error->TryGetStringField(TEXT("error"),Reason))
+            {
+                if(Reason.Contains(TEXT("Vers")))LastCommandError=TEXT("A base foi atualizada; tente novamente.");
+                else if(Reason.Contains(TEXT("Destino")) || Reason.Contains(TEXT("Troca")))LastCommandError=TEXT("Troca incompativel; escolha outro destino.");
+                else if(Reason.Contains(TEXT("pertence")))LastCommandError=TEXT("O item mudou de posicao; tente novamente.");
+                else if(Reason.Contains(TEXT("reservado")))LastCommandError=TEXT("Equipamento reservado na partida.");
+            }
+            if(LastCommandError.IsEmpty())LastCommandError=TEXT("Transferencia recusada; atualizando o inventario.");
             // Base conflicts are recoverable; authoritative raid conflicts need investigation.
             if(Commands[0].Path.StartsWith(TEXT("/state/")) || Commands[0].Path==TEXT("/move"))
             {
@@ -168,13 +178,12 @@ void UMarau6Persistence::OpenRound()
     auto O=Operation();O->SetStringField(TEXT("raidId"),RaidId);
     Queue(TEXT("/raids/open"),O,[this](const FString&){if(auto* Bots=GetWorld()->GetSubsystem<UMarau6Bots>())Bots->ResetForRound(RaidId);bOpening=false;bReady=true;CommitLedger();});
 }
-void UMarau6Persistence::Refresh(AMarau6PlayerController* PC)
+void UMarau6Persistence::Refresh(AMarau6PlayerController* PC,const FString& PreserveMessage)
 {
-    if(!IsValid(PC) || PC->BaseProfile<1) return;
-    PC->bBaseBusy=true;
-    TWeakObjectPtr<AMarau6PlayerController> Weak=PC;
-    Queue(FString::Printf(TEXT("/state/%d"),PC->BaseProfile),nullptr,[Weak](const FString& Text)
-    {if(auto* C=Weak.Get()){C->bBaseBusy=false;C->BaseJson=Text;C->BaseMessage=Text.IsEmpty()?TEXT("Nao foi possivel atualizar; tente 1/2"):TEXT("Base pronta");C->ForceNetUpdate();}});
+    if(!IsValid(PC) || PC->BaseProfile<1)return;
+    PC->bBaseBusy=true;const int32 Profile=PC->BaseProfile;TWeakObjectPtr<AMarau6PlayerController> Weak=PC;
+    if(!Queue(FString::Printf(TEXT("/state/%d"),Profile),nullptr,[Weak,Profile,PreserveMessage](const FString& Text)
+    {if(auto* C=Weak.Get();C && C->BaseProfile==Profile){C->bBaseBusy=false;C->BaseJson=Text;C->BaseMessage=!PreserveMessage.IsEmpty()?PreserveMessage:Text.IsEmpty()?TEXT("Nao foi possivel atualizar; tente 1/2"):TEXT("Base pronta");C->ForceNetUpdate();}}))PC->bBaseBusy=false;
 }
 void UMarau6Persistence::SelectProfile(AMarau6PlayerController* PC,int32 Number)
 {
@@ -187,17 +196,27 @@ void UMarau6Persistence::SelectProfile(AMarau6PlayerController* PC,int32 Number)
     if(PC->BaseProfile) Claims.Remove(PC->BaseProfile);
     PC->BaseProfile=Number;Claims.Add(Number,PC);PC->BaseJson.Empty();PC->BaseMessage=TEXT("Carregando perfil...");Refresh(PC);
 }
-void UMarau6Persistence::MoveBase(AMarau6PlayerController* PC,int32 Source,int32 Destination)
+void UMarau6Persistence::MoveBase(AMarau6PlayerController* PC,int32 Source,int32 Destination,TFunction<void(bool,const FString&)> Done)
 {
-    if(!bReady || bFatal || !IsValid(PC) || PC->bBaseBusy || bEntering || PC->bInRaid || PC->BaseJson.IsEmpty()) return;
-    auto State=Parse(PC->BaseJson);if(!State) return;
-    const TArray<TSharedPtr<FJsonValue>>* Items;if(!State->TryGetArrayField(TEXT("items"),Items)) return;
-    FString Id;for(const auto& V:*Items) if(V->AsObject()->GetIntegerField(TEXT("slot"))==Source) Id=V->AsObject()->GetStringField(TEXT("id"));
-    if(Id.IsEmpty())return;
+    auto Reject=[&](const FString& Why){if(IsValid(PC)){PC->BaseMessage=Why;PC->ForceNetUpdate();}if(Done)Done(false,Why);};
+    if(!bReady || bFatal || !IsValid(PC) || PC->bInRaid || PC->BaseJson.IsEmpty()){Reject(TEXT("Inventario indisponivel neste estado."));return;}
+    if(PC->bBaseBusy || bEntering){Reject(TEXT("Aguarde a transferencia pendente."));return;}
+    auto State=Parse(PC->BaseJson);if(!State){Reject(TEXT("Aguarde atualizar a base."));return;}
+    const TArray<TSharedPtr<FJsonValue>>* Items;if(!State->TryGetArrayField(TEXT("items"),Items)){Reject(TEXT("Aguarde atualizar a base."));return;}
+    FString Id;for(const auto& V:*Items)if(V->AsObject()->GetIntegerField(TEXT("slot"))==Source)Id=V->AsObject()->GetStringField(TEXT("id"));
+    if(Id.IsEmpty()){Reject(TEXT("O item mudou de posicao; tente novamente."));return;}
     auto O=Operation();O->SetNumberField(TEXT("profile"),PC->BaseProfile);O->SetNumberField(TEXT("revision"),State->GetIntegerField(TEXT("revision")));
     O->SetStringField(TEXT("item"),Id);O->SetNumberField(TEXT("destination"),Destination);
-    PC->bBaseBusy=true;PC->BaseMessage=TEXT("Salvando transferencia...");TWeakObjectPtr<AMarau6PlayerController> Weak=PC;
-    Queue(TEXT("/move"),O,[this,Weak](const FString& Text){if(auto* C=Weak.Get()){C->bBaseBusy=false;C->BaseMessage=Text.IsEmpty()?TEXT("Troca rejeitada; base atualizada"):TEXT("Transferencia salva");if(!Text.IsEmpty()) C->BaseJson=Text;else Refresh(C);}});
+    PC->bBaseBusy=true;PC->BaseMessage=TEXT("Salvando transferencia...");TWeakObjectPtr<AMarau6PlayerController> Weak=PC;const int32 Profile=PC->BaseProfile;
+    auto Completion=MakeShared<TFunction<void(bool,const FString&)>>(MoveTemp(Done));
+    if(!Queue(TEXT("/move"),O,[this,Weak,Profile,Completion](const FString& Text)
+    {
+        auto* C=Weak.Get();if(!C || C->BaseProfile!=Profile)return;
+        C->bBaseBusy=false;const FString Why=Text.IsEmpty()?LastCommandError:TEXT("Transferencia salva.");
+        C->BaseMessage=Why;if(!Text.IsEmpty())C->BaseJson=Text;else Refresh(C,Why);C->ForceNetUpdate();
+        if(*Completion)(*Completion)(!Text.IsEmpty(),Why);
+    }))
+    {PC->bBaseBusy=false;const FString Why=TEXT("Nao foi possivel confirmar; os itens foram preservados.");PC->BaseMessage=Why;if(*Completion)(*Completion)(false,Why);}
 }
 void UMarau6Persistence::EnterRaid(AMarau6PlayerController* PC)
 {

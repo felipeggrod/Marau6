@@ -1,5 +1,7 @@
 #include "Marau6InventoryComponent.h"
 #include "Marau6Character.h"
+#include "Marau6PlayerController.h"
+#include "Marau6InventoryUIModel.h"
 #include "Marau6Persistence.h"
 #include "Marau6ItemLedger.h"
 #include "Marau6LootActor.h"
@@ -19,7 +21,8 @@ const FMarau6Item* UMarau6InventoryComponent::ItemAt(int32 Slot) const
 void UMarau6InventoryComponent::ApplySnapshot(const FMarau6InventorySnapshot& Value)
 {
     if(!GetOwner()->HasAuthority()) return;
-    const FGuid Previous=EquippedId;Snapshot=Value;EquippedId.Invalidate();
+    const int32 Revision=Snapshot.Revision+1;
+    const FGuid Previous=EquippedId;Snapshot=Value;Snapshot.Revision=Revision;EquippedId.Invalidate();
     if(!Snapshot.bFinalized) if(const auto* Item=ItemAt(Marau6Slots::Weapon)) EquippedId=Item->Id;
     if(auto* C=Character()){C->OnInventoryChanged(Previous!=EquippedId);if(Snapshot.bFinalized) C->OpenInventoryResult();}
     GetOwner()->ForceNetUpdate();
@@ -44,9 +47,17 @@ AMarau6LootActor* UMarau6InventoryComponent::LookedAtLoot() const
 void UMarau6InventoryComponent::ServerPickup_Implementation(AMarau6LootActor* Loot,FGuid ExpectedId)
 { if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) L->Pickup(this,Loot,ExpectedId); }
 void UMarau6InventoryComponent::ServerMove_Implementation(FGuid ExpectedId,int32 Destination)
-{ if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) L->Move(this,ExpectedId,Destination); }
+{
+    FString Why;const auto* Item=Snapshot.Items.FindByPredicate([ExpectedId](const auto& I){return I.Id==ExpectedId;});
+    Why=Item?FMarau6InventoryUIModel::MoveReason(Snapshot.Items,Item->Slot,Destination,false):TEXT("O item nao esta mais neste inventario.");
+    bool Success=false;if(Why.IsEmpty())if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>())Success=L->Move(this,ExpectedId,Destination);
+    if(auto* C=Character())if(auto* PC=Cast<AMarau6PlayerController>(C->GetController()))PC->ClientInventoryNotice(Success?TEXT("Transferencia confirmada."):Why.IsEmpty()?TEXT("Inventario indisponivel; itens preservados."):Why);
+}
 void UMarau6InventoryComponent::ServerDrop_Implementation(FGuid ExpectedId)
-{ if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>()) L->Drop(this,ExpectedId); }
+{
+    bool Success=false;if(auto* L=GetWorld()->GetSubsystem<UMarau6ItemLedger>())Success=L->Drop(this,ExpectedId);
+    if(auto* C=Character())if(auto* PC=Cast<AMarau6PlayerController>(C->GetController()))PC->ClientInventoryNotice(Success?TEXT("Item descartado."):TEXT("Nao foi possivel descartar; confira o estado do inventario."));
+}
 void UMarau6InventoryComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);DOREPLIFETIME_CONDITION(UMarau6InventoryComponent,Snapshot,COND_OwnerOnly);DOREPLIFETIME(UMarau6InventoryComponent,EquippedId);

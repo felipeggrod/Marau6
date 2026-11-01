@@ -4,9 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Marau6InventoryUIModel.h"
 #include "Marau6PlayerController.generated.h"
 
 class UMarau6Persistence;
+class UMarau6InventoryWidget;
 class UInputMappingContext;
 class UUserWidget;
 
@@ -20,6 +22,7 @@ class MARAU6_API AMarau6PlayerController : public APlayerController
 {
 	GENERATED_BODY()
     friend class FMarau6InventoryReorderTest;
+    friend class FMarau6UIAckTest;
 	
 public:
 
@@ -35,6 +38,35 @@ public:
     int32 GetBaseSelection() const { return BaseSelection; }
     int32 GetBaseSource() const { return BaseSource; }
     static int32 BaseSlot(int32 Index) { return Index<11?Index:100+Index-11; }
+    bool IsInventoryAtBase() const;
+    bool IsInventoryVisible() const;
+    bool IsInventoryReadOnly() const;
+    bool InventoryRequestPending() const;
+    bool HasOwnInventoryDrag() const;
+    bool HasInventoryWidget() const { return InventoryWidget!=nullptr; }
+    UMarau6InventoryWidget* GetInventoryWidget() const {return InventoryWidget.Get();}
+    const TArray<FMarau6Item>& GetInventoryUIItems() const;
+    const FMarau6Item* InventoryUIItemAt(int32 Slot) const;
+    int32 InventoryUIRevision() const;
+    int32 GetInventoryUISelection() const;
+    int32 GetInventoryKeyboardSourceSlot() const { return KeyboardInventorySource.Item.IsValid()?KeyboardInventorySource.Source:INDEX_NONE; }
+    FGuid GetInventoryContext() const {return InventoryContext;}
+    FString GetInventoryNotice() const;
+    void SetInventoryNotice(const FString& Message) {if(!PendingInventoryRequest.IsValid())InventoryMessage=Message;}
+    void SelectInventorySlot(int32 Slot);
+    bool CaptureInventoryDrag(int32 Slot,FMarau6InventoryUIRequest& Out);
+    bool SubmitInventoryDrop(FMarau6InventoryUIRequest Request,int32 Destination);
+    void CancelInventoryDrag();
+    void RefreshInventoryContext();
+    void UpdateInventoryUI();
+    bool HandleInventoryKey(FKey Key);
+    void InventoryKeyboardAccept();
+    UFUNCTION(Server,Reliable) void ServerInventoryMoveUI(FMarau6InventoryUIRequest Request);
+    UFUNCTION(Client,Reliable) void ClientInventoryResult(FGuid Request,FGuid Context,bool bSuccess,const FString& Message,int32 Revision);
+    UFUNCTION(Client,Reliable) void ClientInventoryNotice(const FString& Message);
+    virtual void PlayerTick(float Delta) override;
+    virtual void TickActor(float Delta,ELevelTick Type,FActorTickFunction& Function) override;
+    virtual void EndPlay(EEndPlayReason::Type Reason) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
     virtual void OnPossess(APawn* NewPawn) override;
     UFUNCTION(Server,Reliable) void ServerSelectProfile(int32 Number);
@@ -45,7 +77,21 @@ private:
     friend class UMarau6Persistence;
     UPROPERTY(Replicated) bool bUseBase=false;
     UPROPERTY(Replicated) bool bInRaid=false;
-    bool bBaseBusy=false;
+    UPROPERTY(Replicated) bool bBaseBusy=false;
+    UPROPERTY(Replicated) FGuid InventoryContext;
+    UPROPERTY(Transient) TObjectPtr<UMarau6InventoryWidget> InventoryWidget;
+    mutable FString CachedInventoryJson;
+    mutable TArray<FMarau6Item> CachedBaseItems;
+    mutable int32 CachedBaseRevision=0;
+    FString InventoryContextKey,InventoryMessage,InventoryCompletionMessage,ObservedBaseMessage;
+    FGuid LastInventoryContext,PendingInventoryRequest,PendingInventoryContext,ServerInventoryRequest;
+    double PendingInventorySince=0;
+    int32 InventoryConfirmedRevision=0;
+    bool bInventoryInputActive=false,bInventoryAwaitingState=false,bLastUIAtBase=false;
+    FMarau6InventoryUIRequest KeyboardInventorySource;
+    TMap<FGuid,FMarau6InventoryUIReceipt> InventoryReceipts;
+    TArray<FGuid> InventoryReceiptOrder;
+    void CompleteInventoryRequest(const FMarau6InventoryUIRequest& Request,bool bSuccess,const FString& Message);
     UPROPERTY(Replicated) int32 BaseProfile=0;
     UPROPERTY(Replicated) FString BaseJson;
     UPROPERTY(Replicated) FString BaseMessage;

@@ -2,6 +2,7 @@
 
 #include "Marau6Character.h"
 #include "Marau6HealingComponent.h"
+#include "Marau6PlayerController.h"
 #include "Marau6Bot.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/PlayerStart.h"
@@ -186,7 +187,7 @@ void AMarau6Character::LookInput(const FInputActionValue& Value)
 
 void AMarau6Character::DoAim(float Yaw, float Pitch)
 {
-	if (GetController())
+	if (GetController() && !bInventoryOpen && !bAtBase)
 	{
 		// pass the rotation inputs
 		AddControllerYawInput(Yaw);
@@ -196,7 +197,7 @@ void AMarau6Character::DoAim(float Yaw, float Pitch)
 
 void AMarau6Character::DoMove(float Right, float Forward)
 {
-	if (CanParticipate() && GetController())
+	if (CanParticipate() && !bInventoryOpen && GetController())
 	{
 		// pass the move inputs
 		if(!FMath::IsNearlyZero(Right) || !FMath::IsNearlyZero(Forward))Healing->CancelFromMovement(); AddMovementInput(GetActorRightVector(), Right);
@@ -206,7 +207,7 @@ void AMarau6Character::DoMove(float Right, float Forward)
 
 void AMarau6Character::DoJumpStart()
 {
-	if (!CanParticipate()) return;
+	if (!CanParticipate() || bInventoryOpen) return;
 	Healing->CancelFromMovement();
 	// pass Jump to the character
 	Jump();
@@ -549,6 +550,13 @@ void AMarau6Character::OnInventoryChanged(bool bEquipmentChanged)
         ForceNetUpdate();
     }
 }
+void AMarau6Character::InventoryShortcut(FKey Key)
+{
+    if(Key==EKeys::F)EquipSelectedItem();
+    else if(Key==EKeys::G)DropSelectedItem();
+    else if(Key==EKeys::P)ProtectSelectedItem();
+    else if(Key==EKeys::H)Healing->UseSelected();
+}
 void AMarau6Character::ToggleInventory()
 {
     if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;InventoryMoveSource.Invalidate();}
@@ -577,18 +585,28 @@ void AMarau6Character::DropSelectedItem()
     if(IsLocallyControlled() && CanParticipate() && bInventoryOpen)
         if(const auto* Item=Inventory->ItemAt(SelectedInventorySlot)) Inventory->ServerDrop(Item->Id);
 }
+void AMarau6Character::RequestInventoryMove(FGuid Id,int32 Destination)
+{
+    const auto* Item=Inventory->GetSnapshot().Items.FindByPredicate([Id](const auto& I){return I.Id==Id;});
+    if(!Item)return;
+    if(auto* PC=Cast<AMarau6PlayerController>(GetController());PC && PC->IsInventoryVisible() && PC->GetInventoryContext().IsValid())
+    {FMarau6InventoryUIRequest R;if(PC->CaptureInventoryDrag(Item->Slot,R))PC->SubmitInventoryDrop(R,Destination);}
+    else Inventory->ServerMove(Id,Destination);
+}
 void AMarau6Character::EquipSelectedItem()
 {
     if(IsLocallyControlled() && CanParticipate() && bInventoryOpen)
-        if(const auto* Item=Inventory->ItemAt(SelectedInventorySlot)) Inventory->ServerMove(Item->Id,Marau6Slots::Weapon);
+        if(const auto* Item=Inventory->ItemAt(SelectedInventorySlot)) RequestInventoryMove(Item->Id,Marau6Slots::Weapon);
 }
 void AMarau6Character::ProtectSelectedItem()
 {
     if(!IsLocallyControlled() || !CanParticipate() || !bInventoryOpen) return;
-    const auto* Item=Inventory->ItemAt(SelectedInventorySlot);if(!Item || Item->IsRifle()) return;
+    const auto* Item=Inventory->ItemAt(SelectedInventorySlot);if(!Item)return;
+    if(Item->IsRifle()){if(auto* PC=Cast<AMarau6PlayerController>(GetController()))PC->SetInventoryNotice(TEXT("Rifles nao cabem no safe pocket."));return;}
     const bool bSafe=Marau6Slots::IsSafe(SelectedInventorySlot);
     for(int32 Slot=bSafe?0:Marau6Slots::SafeStart;Slot<(bSafe?Marau6Slots::BackpackCount:Marau6Slots::Weapon);++Slot)
-        if(!Inventory->ItemAt(Slot)){Inventory->ServerMove(Item->Id,Slot);break;}
+        if(!Inventory->ItemAt(Slot)){RequestInventoryMove(Item->Id,Slot);return;}
+    if(auto* PC=Cast<AMarau6PlayerController>(GetController()))PC->SetInventoryNotice(bSafe?TEXT("Mochila cheia."):TEXT("Safe pocket cheio."));
 }
 
 bool AMarau6Character::CanParticipate() const

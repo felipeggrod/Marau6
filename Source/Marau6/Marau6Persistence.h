@@ -22,7 +22,7 @@ public:
     bool CanMutate() const { return bReady && !bEntering && !bFatal; }
     bool CommitLedger();
     void SelectProfile(AMarau6PlayerController* PC,int32 Number);
-    void MoveBase(AMarau6PlayerController* PC,int32 Source,int32 Destination);
+    void MoveBase(AMarau6PlayerController* PC,int32 Source,int32 Destination,TFunction<void(bool,const FString&)> Done={});
     void EnterRaid(AMarau6PlayerController* PC);
     void NextRound(AMarau6PlayerController* PC);
     void Disconnect(AMarau6PlayerController* PC);
@@ -44,7 +44,7 @@ private:
     bool SaveJournal();
     void Pump();
     void OpenRound();
-    void Refresh(AMarau6PlayerController* PC);
+    void Refresh(AMarau6PlayerController* PC,const FString& PreserveMessage=FString());
     void FlushDeferredDeaths();
     void AckSnapshot(const TArray<int32>& Ended);
     void Fail(const FString& Message);
@@ -52,7 +52,7 @@ private:
     void* ServerLock=nullptr;
     float Retry=0;
     int64 Sequence=0;
-    FString RaidId,Key,Url,JournalPath,Status;
+    FString RaidId,Key,Url,JournalPath,Status,LastCommandError;
     TArray<FCommand> Commands;
     TMap<int32,TWeakObjectPtr<AMarau6PlayerController>> Claims;
     TSet<int32> Entered,Submitted,Completed;
