@@ -78,6 +78,10 @@ class AMarau6Character : public ACharacter
     UPROPERTY(EditDefaultsOnly, Category = "Presentation")
     TSoftClassPtr<UAnimInstance> PrototypeThirdPersonPose;
 
+    /** Camera-space shift of the owner's arms and rifle (X forward, Y right, Z up). */
+    UPROPERTY(EditDefaultsOnly, Category = "Presentation")
+    FVector FirstPersonArmsOffset = FVector(18.0, 0.0, -4.0);
+
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
@@ -230,6 +234,9 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(
 		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    /** Pose aim. Flat for the owner, whose arms already pitch with the camera. */
+    virtual FRotator GetBaseAimRotation() const override;
 
 protected:
 

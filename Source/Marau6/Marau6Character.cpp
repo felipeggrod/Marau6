@@ -454,7 +454,26 @@ void AMarau6Character::BeginPlay()
     GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->AddTickPrerequisiteComponent(GetMesh());
+
+    // The camera stays on the capsule so the crosshair matches the server's shot
+    // origin. Carry the arms rigidly with it, keeping their neutral placement, so
+    // the rifle holds its place on screen at any pitch.
+    const FTransform ArmsInCapsule = FirstPersonMesh->GetRelativeTransform() * GetMesh()->GetRelativeTransform();
+    const FTransform CameraInCapsule(FirstPersonCameraComponent->GetRelativeLocation());
+    FirstPersonMesh->AttachToComponent(FirstPersonCameraComponent, FAttachmentTransformRules::KeepRelativeTransform);
+    FTransform ArmsInCamera = ArmsInCapsule.GetRelativeTransform(CameraInCapsule);
+    ArmsInCamera.AddToTranslation(FirstPersonArmsOffset);
+    FirstPersonMesh->SetRelativeTransform(ArmsInCamera);
     OnInventoryChanged(false);
+}
+
+FRotator AMarau6Character::GetBaseAimRotation() const
+{
+    FRotator Aim = Super::GetBaseAimRotation();
+    // The owner's arms copy the body pose and already pitch with the camera; a
+    // pitched body would tilt the rifle twice. Others still see the body aim.
+    if (IsLocallyControlled()) Aim.Pitch = 0.0;
+    return Aim;
 }
 
 void AMarau6Character::Tick(float DeltaSeconds)

@@ -2,6 +2,7 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "Marau6Character.h"
+#include "Camera/CameraComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Engine/SkeletalMesh.h"
@@ -47,6 +48,8 @@ bool FMarau6WeaponVisualTest::RunTest(const FString& Parameters)
         || !TestNotNull(TEXT("Third person rifle exists"), TP)) return false;
     TestTrue(TEXT("First rifle attached to owner's first person body"), FP->GetAttachParent() == Character->GetFirstPersonMesh());
     TestTrue(TEXT("Third rifle attached to world body"), TP->GetAttachParent() == Character->GetMesh());
+    TestTrue(TEXT("First person body follows the camera"),
+        Character->GetFirstPersonMesh()->GetAttachParent() == Character->GetFirstPersonCameraComponent());
     TestEqual(TEXT("First person grip socket"), FP->GetAttachSocketName(), FName("HandGrip_R"));
     TestEqual(TEXT("Third person grip socket"), TP->GetAttachSocketName(), FName("HandGrip_R"));
     TestTrue(TEXT("First body contains grip socket"), Character->GetFirstPersonMesh()->DoesSocketExist(TEXT("HandGrip_R")));

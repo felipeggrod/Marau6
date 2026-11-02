@@ -25,3 +25,13 @@ Abra Lvl_FirstPerson. Use Number of Players 2, Play As Client e New Editor Windo
 Ainda não há efeitos novos, animação de disparo ou animação de recarga. O visual é provisório.
 
 Validação manual confirmada pelo usuário em 28/10/2026, com dois jogadores.
+
+## Braços presos à câmera (02/11/2026)
+
+A câmera continua na cápsula, na altura dos olhos, alinhada à origem do tiro calculada pelo servidor. Em BeginPlay, os braços em primeira pessoa passam a ser filhos da câmera, mantendo a posição neutra; olhar para cima ou para baixo não desloca mais o rifle na tela. Para o próprio dono, GetBaseAimRotation devolve pitch zero, pois o corpo copiado pelos braços já gira com a câmera; os demais jogadores continuam vendo o corpo mirar.
+
+FirstPersonArmsOffset (padrão X=18, Z=-4, em centímetros no espaço da câmera) afasta os braços e o rifle da câmera, mostrando mais do corpo da arma e evitando corte pelo near clip plane. Pode ser ajustado nos defaults do Blueprint do personagem.
+
+Marau6.CaptureViewModel salva capturas da visão em LocalSettings/viewmodel_*.png em vários ângulos de pitch. Use um mapa fora da base persistente, onde o personagem já começa armado:
+
+`UnrealEditor.exe Marau6.uproject /Game/Variant_Shooter/Lvl_Shooter?game=/Game/FirstPerson/Blueprints/BP_FirstPersonGameMode.BP_FirstPersonGameMode_C -game -ExecCmds="Marau6.CaptureViewModel"`
