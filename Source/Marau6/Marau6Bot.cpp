@@ -30,7 +30,7 @@ AMarau6Bot::AMarau6Bot()
     AIControllerClass=AAIController::StaticClass();AutoPossessAI=EAutoPossessAI::PlacedInWorldOrSpawned;
     GetCapsuleComponent()->InitCapsuleSize(34,96);GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn,ECR_Block);GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Visibility,ECR_Block);
     GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);GetMesh()->SetCanEverAffectNavigation(false);GetMesh()->SetRelativeLocation(FVector(0,0,-96));GetMesh()->SetRelativeRotation(FRotator(0,-90,0));
-    static ConstructorHelpers::FObjectFinder<USkeletalMesh> Body(TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));GetMesh()->SetSkeletalMesh(Body.Object);
+    static ConstructorHelpers::FObjectFinder<USkeletalMesh> Body(TEXT("/Game/Marau6/Characters/Krieg/SKM_Krieg.SKM_Krieg"));GetMesh()->SetSkeletalMesh(Body.Object);
     static ConstructorHelpers::FObjectFinder<UAnimSequence> Idle(TEXT("/Game/Characters/Mannequins/Anims/Rifle/MF_Rifle_Idle_ADS.MF_Rifle_Idle_ADS"));IdleAnimation=Idle.Object;
     static ConstructorHelpers::FObjectFinder<UAnimSequence> Walk(TEXT("/Game/Characters/Mannequins/Anims/Rifle/Walk/MF_Rifle_Walk_Fwd.MF_Rifle_Walk_Fwd"));WalkAnimation=Walk.Object;
     Rifle=CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("BotRifle"));Rifle->SetupAttachment(GetMesh(),TEXT("HandGrip_R"));Rifle->SetCollisionEnabled(ECollisionEnabled::NoCollision);Rifle->SetCanEverAffectNavigation(false);
