@@ -31,4 +31,4 @@ Compilação aprovada e38 testes Unreal aprovados, incluindo dano de seção, ti
 
 Decisão de implementação: a geração de navegação é Dynamic, reconstruindo a geometria dos trechos afetados, com modificadores de bloqueio por painel. O modo inicialmente avaliado DynamicModifiersOnly perdeu caminhos ao atualizar a navegação pré-existente; o teste real identificou o problema e a alternativa dinâmica prevista no desenho foi adotada. Acertos que apenas diminuem resistência não solicitam reconstrução.
 
-Verificação final renderizada aprovada, incluindo cliente tardio sem repetir efeitos antigos. Ciclo Unreal/API/PostgreSQL e recuperação em novo processo aprovados. Ainda depende da validação manual do usuário antes de PR/merge.
+Verificação final renderizada aprovada, incluindo cliente tardio sem repetir efeitos antigos. Ciclo Unreal/API/PostgreSQL e recuperação em novo processo aprovados. Validação manual confirmada pelo usuário em01/11/2026; PR e merge autorizados na sequência.
