@@ -86,7 +86,7 @@ class AMarau6Character : public ACharacter
 
     /** Camera-space shift added at full aim so the rifle sights sit on the screen centre. */
     UPROPERTY(EditDefaultsOnly, Category = "Presentation")
-    FVector FirstPersonAimOffset = FVector(12.0, -9.5, -3.0);
+    FVector FirstPersonAimOffset = FVector(12.0, -9.5, 0.5);
 
     /** Camera-space shift of the arms at full sprint. */
     UPROPERTY(EditDefaultsOnly, Category = "Presentation")
