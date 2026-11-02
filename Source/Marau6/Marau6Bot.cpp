@@ -1,6 +1,8 @@
 #include "Marau6Bot.h"
 #include "Marau6DestructibleSection.h"
 #include "Marau6Character.h"
+#include "Marau6Ragdoll.h"
+#include "Marau6ShotFX.h"
 #include "Marau6Persistence.h"
 #include "Marau6ItemLedger.h"
 #include "Marau6ShotEffect.h"
@@ -119,9 +121,13 @@ float AMarau6Bot::TakeDamage(float Damage,const FDamageEvent& Event,AController*
     ForceNetUpdate();Super::TakeDamage(Applied,Event,DamageInstigator,Causer);return Applied;
 }
 void AMarau6Bot::OnRep_State()
-{if(!IsAlive()){Nameplate->SetText(FText::FromString(TEXT("BOT ELIMINADO")));SetActorEnableCollision(false);GetCharacterMovement()->DisableMovement();GetMesh()->SetRelativeRotation(FRotator(0,-90,90));GetMesh()->SetRelativeLocation(FVector(0,0,-70));GetMesh()->bPauseAnims=true;}}
+{if(!IsAlive()){Nameplate->SetText(FText::FromString(TEXT("BOT ELIMINADO")));GetCharacterMovement()->DisableMovement();Marau6Ragdoll::Start(this,FVector::ZeroVector);}}
 void AMarau6Bot::PresentShot_Implementation(FVector_NetQuantize Point,FVector_NetQuantizeNormal Normal,bool bHit,bool bCharacter)
-{if(GetNetMode()!=NM_DedicatedServer)if(auto* Effect=GetWorld()->SpawnActor<AMarau6ShotEffect>())Effect->Present(Rifle,false,Point,Normal,bHit,bCharacter);}
+{
+    if(GetNetMode()==NM_DedicatedServer)return;
+    if(auto* Effect=GetWorld()->SpawnActor<AMarau6ShotEffect>())Effect->Present(Rifle,false,Point,Normal,bHit,bCharacter);
+    if(auto* FX=GetWorld()->SpawnActor<AMarau6ShotFX>(AMarau6ShotFX::StaticClass(),FTransform(FVector(Point))))FX->Present(Rifle,false,Point,Normal,bHit,bCharacter,FVector::ZeroVector,1.f);
+}
 void AMarau6Bot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps)const
 {Super::GetLifetimeReplicatedProps(OutLifetimeProps);DOREPLIFETIME(AMarau6Bot,Health);DOREPLIFETIME(AMarau6Bot,State);DOREPLIFETIME(AMarau6Bot,LootId);DOREPLIFETIME(AMarau6Bot,ShotCount);}
 void AMarau6Bot::EndPlay(const EEndPlayReason::Type Reason)

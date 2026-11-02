@@ -11,6 +11,7 @@
 
 class UMarau6InventoryComponent;
 class UMarau6HealingComponent;
+class UMarau6MovementComponent;
 class UMarau6ItemLedger;
 class AMarau6ExtractionZone;
 class UInputComponent;
@@ -60,6 +61,7 @@ class AMarau6Character : public ACharacter
     friend class FMarau6InventoryReorderTest;
     friend class FMarau6UIInputTest;
     friend class FMarau6AutomaticTest;
+    friend class FMarau6RagdollTest;
 
 	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
@@ -82,9 +84,33 @@ class AMarau6Character : public ACharacter
     UPROPERTY(EditDefaultsOnly, Category = "Presentation")
     FVector FirstPersonArmsOffset = FVector(18.0, 0.0, -4.0);
 
+    /** Camera-space shift added at full aim so the rifle sights sit on the screen centre. */
+    UPROPERTY(EditDefaultsOnly, Category = "Presentation")
+    FVector FirstPersonAimOffset = FVector(12.0, -9.5, 2.0);
+
+    /** Camera-space shift of the arms at full sprint. */
+    UPROPERTY(EditDefaultsOnly, Category = "Presentation")
+    FVector SprintArmsOffset = FVector(0.0, 1.0, -3.0);
+
+    /** Where the rifle points at full sprint, relative to the view. */
+    UPROPERTY(EditDefaultsOnly, Category = "Presentation")
+    FRotator SprintAimRotation = FRotator(-10.0, -30.0, 0.0);
+
+    /** World field of view multiplier while aiming down sights. */
+    UPROPERTY(EditDefaultsOnly, Category = "Presentation")
+    float AimFieldOfViewScale = 0.8f;
+
+    /** Upward and maximum sideways camera kick per accepted shot, in degrees. */
+    UPROPERTY(EditDefaultsOnly, Category = "Combat")
+    FVector2D RecoilKick = FVector2D(0.55, 0.2);
+
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
+
+    /** Inactive camera the first person rig aims from; turning it angles the rifle. */
+    UPROPERTY(VisibleAnywhere, Category = "Presentation")
+    TObjectPtr<UCameraComponent> ViewModelAim;
 
 protected:
 
@@ -95,6 +121,10 @@ protected:
 	/** Atualiza o cliente quando a vida muda. */
 	UFUNCTION()
 	void OnRep_Health();
+
+    /** Direction of the last damaging shot; pushes the ragdoll on death. */
+    UPROPERTY(Replicated)
+    FVector_NetQuantizeNormal LastHitDirection = FVector::ZeroVector;
 
 
     /** Runtime mapping for the prototype; existing movement assets stay unchanged. */
@@ -119,6 +149,30 @@ protected:
     bool bFireNeedsRelease=false;
     double NextLocalFireTime=-1;
     void DoReload();
+    void StartSprint();
+    void StopSprint();
+    void StartAim();
+    void StopAim();
+    void AddRecoil();
+    void UpdateViewModel(float DeltaSeconds);
+
+    // Owner-only presentation state; nothing here is replicated or trusted by the server.
+    FTransform ArmsNeutral;
+    float AimAlpha = 0.f;
+    float SprintAlpha = 0.f;
+    float BobPhase = 0.f;
+    float ShotKick = 0.f;
+    FRotator SwayRotation = FRotator::ZeroRotator;
+    FRotator LastViewRotation = FRotator::ZeroRotator;
+    FRotator PendingRecoil = FRotator::ZeroRotator;
+    float DefaultFieldOfView = 90.f;
+    float DefaultFirstPersonFieldOfView = 70.f;
+
+    // Dead bodies ragdoll; a new round revives this same pawn, so keep how to undo it.
+    void SetRagdoll(bool bEnable);
+    bool bRagdoll = false;
+    FTransform BodyNeutral;
+    FName BodyCollisionProfile;
 
     UFUNCTION(Server, Reliable)
     void ServerReload();
@@ -167,7 +221,7 @@ protected:
 
     static constexpr float PrototypeDamage = 25.0f;
     static constexpr float PrototypeRange = 10000.0f;
-    static constexpr double PrototypeFireInterval = 0.25;
+    static constexpr double PrototypeFireInterval = 60.0 / 450.0;
 
 	/** Jump Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
@@ -186,11 +240,14 @@ protected:
 	class UInputAction* MouseLookAction;
 	
 public:
-	AMarau6Character();
+	AMarau6Character(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
     virtual void Tick(float DeltaSeconds) override;
     UMarau6InventoryComponent* GetInventory() const { return Inventory; }
     UMarau6HealingComponent* GetHealing() const { return Healing; }
     bool HasEquippedRifle() const;
+    UMarau6MovementComponent* GetMarau6Movement() const;
+    bool IsSprinting() const;
+    bool IsAiming() const;
     int32 GetRifleDurability() const;
     bool IsInventoryOpen() const { return bInventoryOpen; }
     void ConfirmInventoryMove();
