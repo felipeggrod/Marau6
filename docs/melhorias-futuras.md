@@ -25,3 +25,19 @@ Novas entradas devem ter identificador, origem (usuário ou assistente), tipo, d
 - **Descrição:** substituir o rifle apenas visual por equipamento individual saqueável, com munição, recarga e transferência de custódia. Avaliar inventário completo de cadáver, audição, cobertura e coordenação tática em blocos posteriores.
 - **Decisão pendente:** definir quais recursos entram primeiro e como equilibrar a oferta de equipamentos. A aprovação dos bots básicos não autoriza estas ampliações.
 - **Critérios sugeridos:** manter GUID e munição em transferências, uma concessão por morte, autoridade do servidor, reinício sem duplicações e custo de IA compatível com a quantidade de bots desejada.
+
+## FUT-003 — Explosões e dano radial no cenário
+
+- **Origem:** ideia do usuário em01/11/2026 durante o planejamento de destruição.
+- **Tipo:** funcionalidade futura.
+- **Estado:** sugerido para o futuro; fora do bloco atual.
+- **Descrição:** permitir que explosões danifiquem jogadores, bots e várias seções do cenário, com validação do servidor.
+- **Decisão pendente:** definir explosivos, alcance, queda de dano com distância e bloqueio por obstáculos. O suporte atual a dano genérico não implementa explosivos nem propagação radial.
+
+## FUT-004 — Materiais que exigem tipos específicos de dano
+
+- **Origem:** ideia do usuário em01/11/2026 durante o planejamento de destruição.
+- **Tipo:** funcionalidade futura.
+- **Estado:** sugerido para o futuro; fora do bloco atual.
+- **Descrição:** paredes ou materiais que só podem ser destruídos por determinados danos ou equipamentos.
+- **Decisão pendente:** definir materiais, danos aceitos e comunicação visual. As seções do primeiro bloco aceitarão qualquer dano válido aplicado pelo servidor.

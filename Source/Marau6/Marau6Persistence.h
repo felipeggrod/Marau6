@@ -49,6 +49,7 @@ private:
     void FlushDeferredDeaths();
     void AckSnapshot(const TArray<int32>& Ended);
     void Fail(const FString& Message);
+    bool bRoundAcknowledged=false;
     bool bEnabled=false,bReady=false,bFatal=false,bSending=false,bEntering=false,bRecovery=false,bOpening=false;
     void* ServerLock=nullptr;
     float Retry=0;

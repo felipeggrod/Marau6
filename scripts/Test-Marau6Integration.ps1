@@ -1,8 +1,8 @@
-﻿param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE,[switch]$Bots,[switch]$Healing,[switch]$Wear,[switch]$InventoryUI,[switch]$Render)
+﻿param([string]$EditorExe='E:/Jogos/Epic Games/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe',[switch]$DisconnectOther,[switch]$PIE,[switch]$Bots,[switch]$Healing,[switch]$Wear,[switch]$InventoryUI,[switch]$Destruction,[switch]$Render)
 $ErrorActionPreference='Stop'
-if($Render -and (!$InventoryUI -or !$PIE)){throw 'Use -Render somente com -PIE -InventoryUI.'}
-if(($Bots -or $Healing -or $Wear -or $InventoryUI) -and !$PIE){throw 'Use -Bots ou -Healing junto com -PIE.'}
-if(@(@($Bots,$Healing,$Wear,$InventoryUI)|Where-Object {$_}).Count -gt 1){throw 'Escolha apenas um modo: -Bots, -Healing ou -Wear.'}
+if($Render -and ((!$InventoryUI -and !$Destruction) -or !$PIE)){throw 'Use -Render com -PIE -InventoryUI ou -Destruction.'}
+if(($Bots -or $Healing -or $Wear -or $InventoryUI -or $Destruction) -and !$PIE){throw 'Os modos de integração exigem -PIE.'}
+if(@(@($Bots,$Healing,$Wear,$InventoryUI,$Destruction)|Where-Object {$_}).Count -gt 1){throw 'Escolha apenas um modo: -Bots, -Healing, -Wear, -InventoryUI ou -Destruction.'}
 $root=Split-Path $PSScriptRoot -Parent
 $settings=Get-Content (Join-Path $root 'LocalSettings/marau6.json') -Raw | ConvertFrom-Json
 $env:MARAU6_DB_PASSWORD=$settings.password
@@ -24,14 +24,15 @@ try {
     for($n=0;$n -lt 50;$n++){try{Invoke-RestMethod 'http://127.0.0.1:5187/health' -Headers @{'X-Marau6-Key'=$settings.apiKey}|Out-Null;$ready=$true;break}catch{Start-Sleep -Milliseconds 200}}
     if(!$ready){throw 'Backend de testes não iniciou.'}
     if($PIE){
-        $testName=if($InventoryUI){'InventoryUIOnlineAndTeardown'}elseif($Wear){'WearOnlineAndTeardown'}elseif($Healing){'HealingOnlineAndTeardown'}elseif($Bots){'BotsOnlineAndTeardown'}else{'BaseOnlineAndTeardown'}
+        $testName=if($Destruction){'DestructionOnlineAndTeardown'}elseif($InventoryUI){'InventoryUIOnlineAndTeardown'}elseif($Wear){'WearOnlineAndTeardown'}elseif($Healing){'HealingOnlineAndTeardown'}elseif($Bots){'BotsOnlineAndTeardown'}else{'BaseOnlineAndTeardown'}
         $log=Join-Path $root 'LocalSettings/unreal-pie-online.log'
         $gameArgs=@('"'+(Join-Path $root 'Marau6.uproject')+'"','-unattended','-NullRHI','-nosound','-nop4','-Marau6Integration',"-Marau6IntegrationRun=$runId",'"-ExecCmds=Automation RunTests EditorLifecycle.'+$testName+'"','"-TestExit=Automation Test Queue Empty"','"-AbsLog='+$log+'"')
         if($Bots -or $Healing){$gameArgs+='-Marau6BotsTest'}
         if($Healing){$gameArgs+='-Marau6HealingTest'}
         if($Wear){$gameArgs+='-Marau6WearTest'}
         if($InventoryUI){$gameArgs+='-Marau6InventoryUITest'}
-        if($Render){$gameArgs=@($gameArgs|ForEach-Object {$_.Replace('-NullRHI','')});$gameArgs+='-Marau6UIRender'}
+        if($Destruction){$gameArgs+='-Marau6DestructionTest'}
+        if($Render){$gameArgs=@($gameArgs|ForEach-Object {$_.Replace('-NullRHI','')});if($Destruction){$gameArgs+='-Marau6DestructionRender'}else{$gameArgs+='-Marau6UIRender'}}
         $game=Start-Process -FilePath $EditorExe -ArgumentList $gameArgs -WorkingDirectory $root -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $root 'LocalSettings/unreal-pie-console.log') -RedirectStandardError (Join-Path $root 'LocalSettings/unreal-pie-error.log')
         if(!$game.WaitForExit(180000)){Stop-Process -Id $game.Id;throw 'Timeout no teste PIE.'}
         $body=Get-Content -LiteralPath $log -Raw
