@@ -14,7 +14,7 @@ public class Marau6 : ModuleRules
 			"Engine",
 			"InputCore",
 			"EnhancedInput",
-			"AIModule", "NavigationSystem", // Authoritative bot navigation, healing, wear, inventory UI and multiplayer verification.
+			"AIModule", "NavigationSystem", // Authoritative bot navigation, healing, wear, inventory UI, section destruction, late-join navigation and multiplayer verification.
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",

@@ -1,4 +1,5 @@
 #include "Marau6Bot.h"
+#include "Marau6DestructibleSection.h"
 #include "Marau6Character.h"
 #include "Marau6Persistence.h"
 #include "Marau6ItemLedger.h"
@@ -99,7 +100,7 @@ void AMarau6Bot::FireAt(AMarau6Character* Player)
     const FVector End=Start+FMath::VRandCone(Aim,FMath::DegreesToRadians(3.f))*2000;FHitResult Hit;FCollisionQueryParams Q(SCENE_QUERY_STAT(Marau6BotShot),false,this);
     const bool bHit=GetWorld()->LineTraceSingleByChannel(Hit,Start,End,ECC_Pawn,Q);LastShot=Now;++ShotCount;
     auto* Victim=bHit?Cast<AMarau6Character>(Hit.GetActor()):nullptr;const bool bCharacter=Victim && Victim->CanParticipate();
-    if(bCharacter){FDamageEvent E;Victim->TakeDamage(10,E,GetController(),this);}
+    if(bCharacter || (bHit && Cast<AMarau6DestructibleSection>(Hit.GetActor()))){FDamageEvent E;Hit.GetActor()->TakeDamage(10,E,GetController(),this);}
     PresentShot(bHit?Hit.ImpactPoint:End,bHit?Hit.ImpactNormal:FVector::ZeroVector,bHit,bCharacter);ForceNetUpdate();
 }
 float AMarau6Bot::TakeDamage(float Damage,const FDamageEvent& Event,AController* DamageInstigator,AActor* Causer)

@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "Marau6Character.h"
+#include "Marau6DestructibleSection.h"
 #include "Marau6HealingComponent.h"
 #include "Marau6PlayerController.h"
 #include "Marau6Bot.h"
@@ -352,7 +353,7 @@ void AMarau6Character::ServerFire_Implementation()
     AMarau6Character* Target = bBlockingHit ? Cast<AMarau6Character>(Hit.GetActor()) : nullptr;
     AMarau6Bot* Bot = bBlockingHit ? Cast<AMarau6Bot>(Hit.GetActor()) : nullptr;
     const bool bHitCharacter = (Target && Target->CanParticipate()) || (Bot && Bot->IsAlive());
-    if (bHitCharacter)
+    if (bHitCharacter || (bBlockingHit && Cast<AMarau6DestructibleSection>(Hit.GetActor())))
     {
         FDamageEvent DamageEvent;
         Hit.GetActor()->TakeDamage(PrototypeDamage, DamageEvent, GetController(), this);

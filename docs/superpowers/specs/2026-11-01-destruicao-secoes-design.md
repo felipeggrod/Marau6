@@ -1,6 +1,6 @@
 # Destruição controlada por seções — desenho
 
-Data: 01/11/2026. Estado: proposta concreta para aprovação, sem código de produto alterado.
+Data: 01/11/2026. Estado: desenho aprovado pelo usuário em01/11/2026; implementação autorizada.
 
 ## Intenção e escolhas confirmadas
 O usuário escolheu destruição por seções independentes: é possível destruir a parede inteira destruindo todas as suas seções. Cada seção aceita qualquer dano válido aplicado pelo servidor, incluindo tiros do rifle comum. Paredes destrutíveis precisam de cor diferente das indestrutíveis. Explosões e materiais que exigem dano específico são ideias futuras, não funcionalidades deste bloco.
