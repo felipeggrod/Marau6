@@ -86,7 +86,7 @@ class AMarau6Character : public ACharacter
 
     /** Camera-space shift added at full aim so the rifle sights sit on the screen centre. */
     UPROPERTY(EditDefaultsOnly, Category = "Presentation")
-    FVector FirstPersonAimOffset = FVector(12.0, -9.5, 2.0);
+    FVector FirstPersonAimOffset = FVector(12.0, -9.5, -3.0);
 
     /** Camera-space shift of the arms at full sprint. */
     UPROPERTY(EditDefaultsOnly, Category = "Presentation")
@@ -170,6 +170,7 @@ protected:
 
     // Dead bodies ragdoll; a new round revives this same pawn, so keep how to undo it.
     void SetRagdoll(bool bEnable);
+    void HideFirstPersonKit();
     bool bRagdoll = false;
     FTransform BodyNeutral;
     FName BodyCollisionProfile;

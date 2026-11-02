@@ -12,7 +12,9 @@ Cadência, recuo, corrida, mira, movimento da arma em primeira pessoa e efeitos 
 
 ## Arma em primeira pessoa
 
-Os braços só se deslocam no espaço da câmera: `FirstPersonArmsOffset`, `FirstPersonAimOffset`, `SprintArmsOffset`, balanço ao andar e recuo para trás. A rotação passa pela câmera inativa `ViewModelAim`: o control rig do template aponta o rifle ao longo dela e mantém as duas mãos na arma, então girá-la inclina a arma sem brigar com o rig. A pose de corrida é `SprintAimRotation`; o atraso ao virar e a subida do cano no disparo também giram essa câmera. Os valores ficam nos defaults do personagem e foram calibrados com capturas; a mira alinha a alça e a massa do SKM_Rifle ao centro da tela. Outro modelo de arma exige recalibrar `FirstPersonAimOffset`.
+Os braços só se deslocam no espaço da câmera: `FirstPersonArmsOffset`, `FirstPersonAimOffset`, `SprintArmsOffset`, balanço ao andar e recuo para trás. A rotação passa pela câmera inativa `ViewModelAim`: o control rig do template aponta o rifle ao longo dela e mantém as duas mãos na arma, então girá-la inclina a arma sem brigar com o rig. A pose de corrida é `SprintAimRotation`; o atraso ao virar e a subida do cano no disparo também giram essa câmera. Os valores ficam nos defaults do personagem e foram calibrados com capturas. Mirando, a arma fica um pouco abaixo da linha de visada (`FirstPersonAimOffset` Z=-3), para mostrar o topo do lasgun; o tiro continua indo para a mira no centro. Outro modelo de arma exige recalibrar esse valor.
+
+O corpo em primeira pessoa é o soldado inteiro. Para o dono, as seções de material do equipamento (capacete, máscara, ombreiras, mochila, pá, botas, calças) ficam ocultas e só mangas, luvas e correias aparecem; as seções são escolhidas pelo nome do slot, então um corpo sem esses slots não muda.
 
 ## Efeitos do disparo
 

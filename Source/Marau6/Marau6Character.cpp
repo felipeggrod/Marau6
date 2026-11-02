@@ -35,6 +35,7 @@
 #include "Marau6ShotFX.h"
 #include "Marau6Ragdoll.h"
 #include "Engine/SkeletalMesh.h"
+#include "Rendering/SkeletalMeshRenderData.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Marau6MovementComponent.h"
 #include "HAL/IConsoleManager.h"
@@ -522,6 +523,7 @@ void AMarau6Character::BeginPlay()
     GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->AddTickPrerequisiteComponent(GetMesh());
+    HideFirstPersonKit();
     BodyNeutral = GetMesh()->GetRelativeTransform();
     BodyCollisionProfile = GetMesh()->GetCollisionProfileName();
 
@@ -538,6 +540,30 @@ void AMarau6Character::BeginPlay()
     DefaultFieldOfView = FirstPersonCameraComponent->FieldOfView;
     DefaultFirstPersonFieldOfView = FirstPersonCameraComponent->FirstPersonFieldOfView;
     OnInventoryChanged(false);
+}
+
+void AMarau6Character::HideFirstPersonKit()
+{
+    // The owner's view keeps only sleeves, gloves and straps. The soldier's kit
+    // shares the arms' spine bones, so whole material sections are hidden instead.
+    static const TCHAR* Kit[] = { TEXT("backpack"), TEXT("boots"), TEXT("buttons"), TEXT("gasmask"), TEXT("glass"),
+        TEXT("head"), TEXT("helmet"), TEXT("pants"), TEXT("respirator"), TEXT("shoulder"), TEXT("shovel"), TEXT("string") };
+    const USkeletalMesh* Body = FirstPersonMesh->GetSkeletalMeshAsset();
+    const FSkeletalMeshRenderData* Render = Body ? Body->GetResourceForRendering() : nullptr;
+    if (!Render) return;
+    const TArray<FSkeletalMaterial>& Slots = Body->GetMaterials();
+    for (int32 Lod = 0; Lod < Render->LODRenderData.Num(); ++Lod)
+    {
+        const TArray<FSkelMeshRenderSection>& Sections = Render->LODRenderData[Lod].RenderSections;
+        for (int32 Section = 0; Section < Sections.Num(); ++Section)
+        {
+            const int32 Slot = Sections[Section].MaterialIndex;
+            if (!Slots.IsValidIndex(Slot)) continue;
+            const FString Name = (Slots[Slot].MaterialSlotName.ToString() + GetNameSafe(Slots[Slot].MaterialInterface)).ToLower();
+            for (const TCHAR* Part : Kit)
+                if (Name.Contains(Part)) { FirstPersonMesh->ShowMaterialSection(Slot, Section, false, Lod); break; }
+        }
+    }
 }
 
 FRotator AMarau6Character::GetBaseAimRotation() const
