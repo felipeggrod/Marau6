@@ -59,6 +59,11 @@ public:
 };
 }
 
+UMarau6MovementComponent::UMarau6MovementComponent()
+{
+    MaxWalkSpeed = 500.f;
+}
+
 bool UMarau6MovementComponent::IsSprinting() const
 {
     if (!bWantsToSprint || !IsMovingOnGround() || !UpdatedComponent) return false;

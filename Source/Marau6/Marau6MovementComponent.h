@@ -16,8 +16,10 @@ class MARAU6_API UMarau6MovementComponent : public UCharacterMovementComponent
     friend class FMarau6SprintMovementTest;
 
 public:
+    UMarau6MovementComponent();
+
     UPROPERTY(EditDefaultsOnly, Category = "Marau6|Movement")
-    float SprintSpeedMultiplier = 1.6f;
+    float SprintSpeedMultiplier = 1.3f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Marau6|Movement")
     float AimSpeedMultiplier = 0.6f;

@@ -6,8 +6,8 @@ Cadência, recuo, corrida, mira, movimento da arma em primeira pessoa e efeitos 
 
 - Cadência de 450 disparos por minuto (0,133 s), validada pelo servidor.
 - Recuo: cada disparo aceito localmente sobe a mira 0,55° e desvia até ±0,2° para os lados (30% menos mirando). O servidor dispara pela rotação de controle replicada, então o recuo move a mira real e o jogador compensa puxando para baixo. Antes de cada disparo o cliente envia os movimentos pendentes (`FlushServerMoves`), para o servidor usar a mira e o estado de corrida atuais.
-- Shift corre a 1,6× apenas andando para frente e no chão. Não dispara nem mira correndo; o servidor recusa tiros durante a corrida. Correr cancela a mira; recarregar interrompe a corrida. Depois da corrida o disparo volta quando a arma já subiu.
-- Botão direito segurado mira: 0,6× de velocidade, zoom de 20% e sensibilidade do mouse proporcional ao zoom. A mira fica indisponível durante a recarga e com o inventário aberto.
+- Andando: 5 m/s. Shift corre a 1,3× (6,5 m/s) apenas andando para frente e no chão. Não dispara nem mira correndo; o servidor recusa tiros durante a corrida. Correr cancela a mira; recarregar interrompe a corrida. Depois da corrida o disparo volta quando a arma já subiu.
+- Botão direito segurado mira: 0,6× de velocidade (3 m/s), zoom de 20% e sensibilidade do mouse proporcional ao zoom. A mira fica indisponível durante a recarga e com o inventário aberto.
 - `UMarau6MovementComponent` leva os desejos de correr e mirar em cada movimento salvo (flags `FLAG_Custom_0` e `FLAG_Custom_1`), de modo que o servidor aplica a mesma velocidade prevista pelo cliente.
 
 ## Arma em primeira pessoa
