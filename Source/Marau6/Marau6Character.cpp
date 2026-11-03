@@ -574,15 +574,18 @@ void AMarau6Character::OnRep_ReloadPose()
         }
     }
     if (!ReloadAnimation) return;
-    // Others see the montage on the body; the owner's view model stages its own reload.
-    UAnimInstance* Pose = GetMesh()->GetAnimInstance();
-    if (!Pose) return;
-    if (bReloadPose)
+    // Others see the montage on the body. The owner's arms are attached to the camera,
+    // so their copy-pose node no longer finds the body: play the clip on them directly,
+    // which moves the left hand while the reload releases the hand rig.
+    for (USkeletalMeshComponent* Body : { GetMesh(), IsLocallyControlled() ? FirstPersonMesh : nullptr })
     {
-        Pose->PlaySlotAnimationAsDynamicMontage(ReloadAnimation, ReloadSlot, .15f, .2f,
-            ReloadAnimation->GetPlayLength() / PrototypeReloadDuration);
+        UAnimInstance* Pose = Body ? Body->GetAnimInstance() : nullptr;
+        if (!Pose) continue;
+        if (bReloadPose)
+            Pose->PlaySlotAnimationAsDynamicMontage(ReloadAnimation, ReloadSlot, .15f, .2f,
+                ReloadAnimation->GetPlayLength() / PrototypeReloadDuration);
+        else Pose->StopSlotAnimation(.2f, ReloadSlot);
     }
-    else Pose->StopSlotAnimation(.2f, ReloadSlot);
 }
 
 
