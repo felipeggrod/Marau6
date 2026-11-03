@@ -47,3 +47,7 @@ Jogadores e bots viram ragdoll (`Marau6Ragdoll`): a cápsula deixa de bloquear e
 - `Marau6.CaptureViewModel` salva capturas em `LocalSettings/viewmodel_*.png`. Use um mapa fora da base persistente, onde o personagem já começa armado: `/Game/Variant_Shooter/Lvl_Shooter?game=/Game/FirstPerson/Blueprints/BP_FirstPersonGameMode.BP_FirstPersonGameMode_C`. `LocalSettings/viewmodel_shots.txt` pode trocar a lista: uma linha `nome;pitch;comando|comando;espera`.
 - `Marau6.ViewModelPose 1|2` força a pose de mira ou de corrida; `Marau6.ShotFXAge` congela os efeitos numa idade; `Marau6.PreviewShotFX` mostra um disparo do dono sem tiro no servidor.
 - Testes: `Marau6.Combat.SprintMovement` e `Marau6.Combat.Ragdoll`.
+
+## Decais de impacto (03/11/2026)
+
+Os decais sempre renderizaram, mas eram pequenos demais para aparecer: a marca ocupa bem menos da metade do tile do atlas, e a caixa de projeção do furo tinha 2-3 cm de meia-extensão (furo visível de ~1 cm). Agora o furo usa 10-12 cm de meia-extensão (marca de ~7-9 cm) e o sangue usa caixa 1,6x maior com `Opacity` 2 para a mancha não ficar apagada. `Marau6.PreviewDecal` projeta um furo, um sangue e o decal padrão do motor (controle) sob a mira, para diagnóstico.

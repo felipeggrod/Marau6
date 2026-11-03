@@ -51,11 +51,14 @@ FLinearColor RandomFrame()
 
 // Decals show one tile of their atlas, picked per decal. A bullet hole is a few
 // centimetres wide, so it must not be culled by screen size like a large decal.
-void ShowRandomTile(UDecalComponent* Decal)
+void ShowRandomTile(UDecalComponent* Decal, float Opacity = 1.f)
 {
     if (Decal) Decal->SetFadeScreenSize(0.f);
     if (UMaterialInstanceDynamic* Look = Decal ? Decal->CreateDynamicMaterialInstance() : nullptr)
+    {
         Look->SetVectorParameterValue(TEXT("Frame"), RandomFrame());
+        Look->SetScalarParameterValue(TEXT("Opacity"), Opacity);
+    }
 }
 
 UStaticMeshComponent* MakeCosmeticMesh(AActor* Owner, const TCHAR* Name, UStaticMesh* Mesh, USceneComponent* Parent)
@@ -325,7 +328,9 @@ void AMarau6ShotFX::SpawnDecals()
         {
             FRotator Facing = (-ImpactNormal).Rotation();
             Facing.Roll = FMath::FRandRange(0.f, 360.f);
-            const float Size = FMath::FRandRange(2.f, 3.f);
+            // The mark covers well under half of its tile, so the projection box is a
+            // good deal larger than the visible hole (about 7-9 cm across).
+            const float Size = FMath::FRandRange(10.f, 12.f);
             ShowRandomTile(UGameplayStatics::SpawnDecalAtLocation(World, Hole, FVector(4.f, Size, Size), ImpactPoint, Facing, 20.f));
         }
         return;
@@ -345,7 +350,8 @@ void AMarau6ShotFX::SpawnDecals()
         FRotator Facing = (-Hit.ImpactNormal).Rotation();
         Facing.Roll = FMath::FRandRange(0.f, 360.f);
         const float Size = FMath::FRandRange(.5f, 1.f) * Probe.Value;
-        ShowRandomTile(UGameplayStatics::SpawnDecalAtLocation(World, Blood, FVector(8.f, Size, Size), Hit.ImpactPoint, Facing, 30.f));
+        // Blood reads faint at its painted alpha; push coverage so the splat stays legible.
+        ShowRandomTile(UGameplayStatics::SpawnDecalAtLocation(World, Blood, FVector(8.f, Size * 1.6f, Size * 1.6f), Hit.ImpactPoint, Facing, 30.f), 2.f);
     }
 }
 

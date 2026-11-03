@@ -1,6 +1,10 @@
 #if WITH_EDITOR
 #include "Marau6Character.h"
 #include "Marau6ItemLedger.h"
+#include "Components/DecalComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Materials/MaterialInterface.h"
 #include "Marau6LootActor.h"
 #include "Animation/AnimBlueprint.h"
 #include "Animation/BlendSpace.h"
@@ -342,6 +346,32 @@ static void PreviewLoot(UWorld* World)
         Loot->FinishSpawning(FTransform(At));
     }
 }
+/** Debug: big bullet hole, blood and engine default decals on the surface under the crosshair. */
+static void PreviewDecal(UWorld* World)
+{
+    APlayerController* PC = World && World->IsGameWorld() ? World->GetFirstPlayerController() : nullptr;
+    if (!PC || !PC->PlayerCameraManager) return;
+    const FVector From = PC->PlayerCameraManager->GetCameraLocation();
+    const FVector Dir = PC->PlayerCameraManager->GetCameraRotation().Vector();
+    FHitResult Hit;
+    FCollisionQueryParams Query(SCENE_QUERY_STAT(Marau6PreviewDecal), false, PC->GetPawn());
+    if (!World->LineTraceSingleByChannel(Hit, From, From + Dir * 5000.0, ECC_Visibility, Query)) return;
+    const FVector Side = FVector::VectorPlaneProject(FRotationMatrix(PC->PlayerCameraManager->GetCameraRotation()).GetUnitAxis(EAxis::Y), Hit.ImpactNormal).GetSafeNormal();
+    const TCHAR* Paths[] = { TEXT("/Game/Marau6/Effects/M_BulletHole.M_BulletHole"), TEXT("/Game/Marau6/Effects/M_BloodDecal.M_BloodDecal"),
+        TEXT("/Engine/EngineMaterials/DefaultDeferredDecalMaterial.DefaultDeferredDecalMaterial") };
+    for (int32 Index = 0; Index < 3; ++Index)
+        if (UMaterialInterface* Look = LoadObject<UMaterialInterface>(nullptr, Paths[Index]))
+        {
+            UDecalComponent* Decal = UGameplayStatics::SpawnDecalAtLocation(World, Look, FVector(10.0, 35.0, 35.0),
+                Hit.ImpactPoint + Side * (Index - 1) * 80.0, (-Hit.ImpactNormal).Rotation(), 60.f);
+            if (Decal) Decal->SetFadeScreenSize(0.f);
+            UE_LOG(LogTemp, Display, TEXT("MARAU6_DECAL %s spawned=%d at %s normal %s"), Paths[Index], Decal != nullptr,
+                *Hit.ImpactPoint.ToString(), *Hit.ImpactNormal.ToString());
+        }
+}
+static FAutoConsoleCommandWithWorld PreviewDecalCommand(TEXT("Marau6.PreviewDecal"),
+    TEXT("Debug: large bullet hole, blood and engine default decals under the crosshair."),
+    FConsoleCommandWithWorldDelegate::CreateStatic(&PreviewDecal));
 static FAutoConsoleCommandWithWorld PreviewLootCommand(TEXT("Marau6.PreviewLoot"),
     TEXT("Lay out one loot item of each kind ahead of the viewer."),
     FConsoleCommandWithWorldDelegate::CreateStatic(&PreviewLoot));
