@@ -61,8 +61,8 @@ bool FMarau6WeaponVisualTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Third rifle has no collision"), TP->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
     if (TestNotNull(TEXT("First rifle mesh"), FP->GetSkeletalMeshAsset()))
     {
-        TestEqual(TEXT("Template rifle used"), FP->GetSkeletalMeshAsset()->GetPathName(),
-            FString(TEXT("/Game/Weapons/Rifle/Meshes/SKM_Rifle.SKM_Rifle")));
+        TestEqual(TEXT("Lasgun model used"), FP->GetSkeletalMeshAsset()->GetPathName(),
+            FString(TEXT("/Game/Weapons/Lasgun/Meshes/SKM_Lasgun.SKM_Lasgun")));
     }
     TestTrue(TEXT("Both perspectives use same rifle model"), FP->GetSkeletalMeshAsset() == TP->GetSkeletalMeshAsset());
     TestNotNull(TEXT("First person animation initialized"), Character->GetFirstPersonMesh()->GetAnimInstance());

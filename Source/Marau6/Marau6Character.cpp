@@ -104,7 +104,7 @@ AMarau6Character::AMarau6Character(const FObjectInitializer& ObjectInitializer)
     ThirdPersonRifle->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
 
     static ConstructorHelpers::FObjectFinder<USkeletalMesh> Rifle(
-        TEXT("/Game/Weapons/Rifle/Meshes/SKM_Rifle.SKM_Rifle"));
+        TEXT("/Game/Weapons/Lasgun/Meshes/SKM_Lasgun.SKM_Lasgun"));
     if (Rifle.Succeeded())
     {
         FirstPersonRifle->SetSkeletalMesh(Rifle.Object);
@@ -525,6 +525,9 @@ void AMarau6Character::BeginPlay()
     GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
     FirstPersonMesh->AddTickPrerequisiteComponent(GetMesh());
+    // The first person mesh is the whole soldier; its helmet and gas mask sit in
+    // front of the camera, so the owner's view drops the head and what hangs on it.
+    FirstPersonMesh->HideBoneByName(TEXT("head"), EPhysBodyOp::PBO_None);
     HideFirstPersonKit();
     BodyNeutral = GetMesh()->GetRelativeTransform();
     BodyCollisionProfile = GetMesh()->GetCollisionProfileName();

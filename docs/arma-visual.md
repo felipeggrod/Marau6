@@ -35,3 +35,11 @@ FirstPersonArmsOffset (padrão X=18, Z=-4, em centímetros no espaço da câmera
 Marau6.CaptureViewModel salva capturas da visão em LocalSettings/viewmodel_*.png em vários ângulos de pitch. Use um mapa fora da base persistente, onde o personagem já começa armado:
 
 `UnrealEditor.exe Marau6.uproject /Game/Variant_Shooter/Lvl_Shooter?game=/Game/FirstPerson/Blueprints/BP_FirstPersonGameMode.BP_FirstPersonGameMode_C -game -ExecCmds="Marau6.CaptureViewModel"`
+
+## Modelo lasgun (02/11/2026)
+
+O rifle do template foi substituído pela lasgun Kantrael. SKM_Lasgun equipa as duas perspectivas do personagem e os bots; SM_Lasgun é o loot no chão. Ficam em Content/Weapons/Lasgun, com Materials, Meshes e Textures.
+
+Fonte: "warhammer40k - modular kantrael pattern lasgun", de sanyaork (https://sketchfab.com/3d-models/warhammer40k-modular-kantrael-pattern-lasgun-e3c65702ed894a9e99d9b771f90d6d9b), licença CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/). O crédito ao autor é obrigatório e o uso comercial é proibido. A arma também é propriedade intelectual da Games Workshop; trocar o modelo antes de qualquer distribuição comercial.
+
+O modelo original é modular e animado. Foi usada a pose de repouso (coronha fixa, carregador padrão, cano curto, miras de ferro), sem os módulos guardados fora da arma. A pose foi aplicada aos vértices, nivelada e reduzida para 70%, de forma que punho, coronha e carregador coincidem com o SKM_Rifle. A origem continua no punho (HandGrip_R) e o cano aponta para +Y. Os soquetes Muzzle, GripPoint e GripPoint_002 seguem os nomes do rifle antigo; Muzzle fica em (0, 63,1, 10,5). Os materiais são instâncias de M_Lasgun (cor, ORM no padrão glTF e normal, com uso em malha esquelética), pois o M_GLTF do Interchange não tem esse uso e cairia no material padrão.

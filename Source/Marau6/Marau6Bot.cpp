@@ -35,7 +35,7 @@ AMarau6Bot::AMarau6Bot()
     static ConstructorHelpers::FObjectFinder<UAnimSequence> Idle(TEXT("/Game/Characters/Mannequins/Anims/Rifle/MF_Rifle_Idle_ADS.MF_Rifle_Idle_ADS"));IdleAnimation=Idle.Object;
     static ConstructorHelpers::FObjectFinder<UAnimSequence> Walk(TEXT("/Game/Characters/Mannequins/Anims/Rifle/Walk/MF_Rifle_Walk_Fwd.MF_Rifle_Walk_Fwd"));WalkAnimation=Walk.Object;
     Rifle=CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("BotRifle"));Rifle->SetupAttachment(GetMesh(),TEXT("HandGrip_R"));Rifle->SetCollisionEnabled(ECollisionEnabled::NoCollision);Rifle->SetCanEverAffectNavigation(false);
-    static ConstructorHelpers::FObjectFinder<USkeletalMesh> Gun(TEXT("/Game/Weapons/Rifle/Meshes/SKM_Rifle.SKM_Rifle"));Rifle->SetSkeletalMesh(Gun.Object);
+    static ConstructorHelpers::FObjectFinder<USkeletalMesh> Gun(TEXT("/Game/Weapons/Lasgun/Meshes/SKM_Lasgun.SKM_Lasgun"));Rifle->SetSkeletalMesh(Gun.Object);
     Nameplate=CreateDefaultSubobject<UTextRenderComponent>(TEXT("BotLabel"));Nameplate->SetupAttachment(GetRootComponent());Nameplate->SetRelativeLocation(FVector(0,0,125));Nameplate->SetText(FText::FromString(TEXT("BOT")));Nameplate->SetHorizontalAlignment(EHTA_Center);Nameplate->SetWorldSize(20);Nameplate->SetTextRenderColor(FColor::Red);Nameplate->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     Footsteps=CreateDefaultSubobject<UMarau6Footsteps>(TEXT("Footsteps"));
     bUseControllerRotationYaw=false;GetCharacterMovement()->bOrientRotationToMovement=true;GetCharacterMovement()->MaxWalkSpeed=250;GetCharacterMovement()->RotationRate=FRotator(0,360,0);

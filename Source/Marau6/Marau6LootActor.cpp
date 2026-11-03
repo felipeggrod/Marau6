@@ -17,7 +17,7 @@ AMarau6LootActor::AMarau6LootActor()
     Mesh=CreateDefaultSubobject<UStaticMeshComponent>(TEXT("LootMesh"));Mesh->SetupAttachment(Bounds);
     Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);Mesh->SetCanEverAffectNavigation(false);
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Cube(TEXT("/Engine/BasicShapes/Cube.Cube"));
-    static ConstructorHelpers::FObjectFinder<UStaticMesh> Rifle(TEXT("/Game/Weapons/Rifle/Meshes/SM_Rifle.SM_Rifle"));
+    static ConstructorHelpers::FObjectFinder<UStaticMesh> Rifle(TEXT("/Game/Weapons/Lasgun/Meshes/SM_Lasgun.SM_Lasgun"));
     BoxMesh=Cube.Object;RifleMesh=Rifle.Object;Mesh->SetStaticMesh(BoxMesh);Mesh->SetRelativeScale3D(FVector(.35,.35,.25));
     Label=CreateDefaultSubobject<UTextRenderComponent>(TEXT("LootLabel"));Label->SetupAttachment(Bounds);
     Label->SetRelativeLocation(FVector(0,0,40));Label->SetRelativeRotation(FRotator(0,180,0));
