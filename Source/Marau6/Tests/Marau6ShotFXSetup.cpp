@@ -37,9 +37,9 @@
 
 // Editor-only generator for the assets used by AMarau6ShotFX. Materials are built
 // from engine math nodes over the flash and smoke textures painted by
-// scripts/Generate-ShotTextures.py; the rifle report and the decompression gas are
-// imported from the WAVs written by scripts/Generate-RifleShot.py and
-// scripts/Generate-Decompression.py, so no external content is needed.
+// scripts/Generate-ShotTextures.py. The decompression gas is imported from the WAV
+// written by scripts/Generate-Decompression.py; the rifle fire from S_RifleFire.wav,
+// converted from the supplied clip (docs/som-disparo.md).
 namespace Marau6ShotFXAssets
 {
 template<typename T> T* Add(UMaterial* M)
@@ -213,7 +213,7 @@ UObject* ImportGenerated(const TCHAR* Folder, const TCHAR* Name, const TCHAR* De
     const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / Folder / Name);
     if (!FPaths::FileExists(File))
     {
-        UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX missing %s; run scripts/%s first."), *File, Script);
+        UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX missing %s; run %s first."), *File, Script);
         return nullptr;
     }
     // An asset already loaded at startup (the player controller's gas) keeps its file
@@ -238,7 +238,7 @@ bool ImportSound(const TCHAR* Name, const TCHAR* Script)
 UTexture2D* ImportEffectTexture(const TCHAR* Name)
 {
     auto* Texture = Cast<UTexture2D>(ImportGenerated(TEXT("SourceTextures"), Name, TEXT("/Game/Marau6/Effects"),
-        TEXT("Generate-ShotTextures.py")));
+        TEXT("scripts/Generate-ShotTextures.py")));
     if (!Texture) return nullptr;
     Texture->PreEditChange(nullptr);
     Texture->LODGroup = TEXTUREGROUP_Effects;
@@ -332,12 +332,12 @@ void Setup()
 
     bool bSaved = true;
     for (UMaterial* M : { Flash, Muzzle, Tracer, Smoke, Puff, Hole, Blood }) bSaved &= Save(M);
-    if (!bSaved || !ImportSound(TEXT("S_RifleShot.wav"), TEXT("Generate-RifleShot.py"))
-        || !ImportSound(TEXT("S_Decompression.wav"), TEXT("Generate-Decompression.py")))
+    if (!bSaved || !ImportSound(TEXT("S_RifleFire.wav"), TEXT("the ffmpeg conversion in docs/som-disparo.md"))
+        || !ImportSound(TEXT("S_Decompression.wav"), TEXT("scripts/Generate-Decompression.py")))
         UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX asset generation failed."));
 }
 static FAutoConsoleCommand SetupCommand(TEXT("Marau6.SetupShotFX"),
-    TEXT("Import the shot textures, create or replace the shot materials in /Game/Marau6/Effects and import the rifle report and decompression gas."),
+    TEXT("Import the shot textures, create or replace the shot materials in /Game/Marau6/Effects and import the rifle fire and decompression gas."),
     FConsoleCommandDelegate::CreateStatic(&Setup));
 }
 #endif

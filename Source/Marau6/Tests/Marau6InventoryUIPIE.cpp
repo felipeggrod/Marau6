@@ -141,6 +141,8 @@ public:
             if(Render && !bHUDShot)
             {
                 if(!Local[0]->HasHUDWidget() || Now-At<1.5)return false;bHUDShot=true;
+                CA->HotbarKey(0);D->Test->TestEqual(TEXT("First hotbar press arms the slot"),CA->GetHotbarArmedSlot(),0);
+                Local[0]->GetHUDWidget()->TakeWidget()->SlatePrepass();
                 TArray<FColor> Pixels;FIntVector Size;auto Window=FSlateApplication::Get().FindWidgetWindow(Local[0]->GetHUDWidget()->TakeWidget());
                 const bool Captured=Window.IsValid() && FSlateApplication::Get().TakeScreenshot(Window.ToSharedRef(),Pixels,Size);
                 D->Test->TestTrue(TEXT("Rendered raid HUD screenshot captured"),Captured && Size.X>0 && Size.Y>0);

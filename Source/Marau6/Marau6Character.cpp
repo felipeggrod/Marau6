@@ -160,6 +160,14 @@ void AMarau6Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
                     BindInventoryKey(TEXT("ItemDrop"),EKeys::G,&AMarau6Character::DropSelectedItem);
                     BindInventoryKey(TEXT("ItemEquip"),EKeys::F,&AMarau6Character::EquipSelectedItem);
                     BindInventoryKey(TEXT("ItemProtect"),EKeys::P,&AMarau6Character::ProtectSelectedItem);
+                    const FKey HotbarKeys[]={EKeys::One,EKeys::Two,EKeys::Three,EKeys::Four,EKeys::Five,EKeys::Six,EKeys::Seven,EKeys::Eight};
+                    for(int32 N=0;N<Marau6Slots::BackpackCount;N++)
+                    {
+                        UInputAction* Action=NewObject<UInputAction>(this,FName(*FString::Printf(TEXT("Hotbar%d"),N+1)));
+                        Action->ValueType=EInputActionValueType::Boolean;
+                        PrototypeFireMapping->MapKey(Action,HotbarKeys[N]);
+                        EnhancedInputComponent->BindActionValueLambda(Action,ETriggerEvent::Started,[this,N](const FInputActionValue&){HotbarKey(N);});
+                    }
                     UInputAction* HealAction=NewObject<UInputAction>(this,FName(TEXT("ItemHeal")));HealAction->ValueType=EInputActionValueType::Boolean;
                     PrototypeFireMapping->MapKey(HealAction,EKeys::H);EnhancedInputComponent->BindAction(HealAction,ETriggerEvent::Started,Healing.Get(),&UMarau6HealingComponent::UseSelected);
                     auto BindHoldKey = [&](const TCHAR* Name,FKey Key,void (AMarau6Character::*Press)(),void (AMarau6Character::*Release)())
@@ -840,8 +848,33 @@ void AMarau6Character::InventoryShortcut(FKey Key)
 }
 void AMarau6Character::ToggleInventory()
 {
-    if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;if(bInventoryOpen)bFireNeedsRelease=true;InventoryMoveSource.Invalidate();}
+    if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;if(bInventoryOpen)bFireNeedsRelease=true;InventoryMoveSource.Invalidate();HotbarArmed=INDEX_NONE;}
 }
+void AMarau6Character::HotbarKey(int32 Slot)
+{
+    if(!IsLocallyControlled() || bInventoryOpen || !CanParticipate() || Slot<0 || Slot>=Marau6Slots::BackpackCount)return;
+    auto Notice=[this](const FString& Text){HotbarNotice=Text;HotbarNoticeAt=GetWorld()->GetTimeSeconds();};
+    const auto* Item=Inventory->ItemAt(Slot);
+    if(GetHotbarArmedSlot()!=Slot)
+    {
+        SelectedInventorySlot=Slot;HotbarArmed=Slot;
+        if(!Item)Notice(TEXT("Slot vazio."));else if(Item->Kind==EMarau6ItemKind::Scrap)Notice(TEXT("Pecas: sem uso na partida."));else HotbarNoticeAt=-100;
+        return;
+    }
+    if(!Item){Notice(TEXT("Slot vazio."));return;}
+    // Supplies go through the server's healing rules; a press while healing cancels.
+    if(Item->Kind==EMarau6ItemKind::Supply){Healing->UseItem(Item->Id);return;}
+    if(Item->IsRifle() || Item->IsAmmo())
+    {
+        const FString Why=FMarau6InventoryUIModel::MoveReason(Inventory->GetSnapshot().Items,Slot,Marau6Slots::Weapon,false);
+        if(!Why.IsEmpty()){Notice(Item->IsAmmo() && !HasEquippedRifle()?TEXT("Equipe um rifle para usar a municao."):Why);return;}
+        Inventory->ServerMove(Item->Id,Marau6Slots::Weapon);HotbarArmed=INDEX_NONE;
+        Notice(Item->IsRifle()?TEXT("Trocando de rifle..."):TEXT("Abastecendo a reserva com 20 balas..."));return;
+    }
+    Notice(TEXT("Pecas: sem uso na partida."));
+}
+FString AMarau6Character::GetHotbarNotice() const
+{return GetWorld() && GetWorld()->GetTimeSeconds()-HotbarNoticeAt<3.0?HotbarNotice:FString();}
 void AMarau6Character::ConfirmInventoryMove()
 {
     if(!IsLocallyControlled() || !CanParticipate() || !bInventoryOpen)

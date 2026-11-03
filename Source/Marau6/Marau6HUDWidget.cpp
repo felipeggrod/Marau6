@@ -116,13 +116,13 @@ TSharedRef<SWidget> UMarau6HUDWidget::RebuildWidget()
     {
         const bool bWeapon=Index==Marau6Slots::Weapon;
         return SNew(SBox).WidthOverride(Width).HeightOverride(68)[SNew(SBorder).Padding(1)
-            .BorderImage_Lambda([Char,Index]{const auto* C=Char();return C && C->GetSelectedInventorySlot()==Index?Marau6UI::SlotBoxSelected():Marau6UI::SlotBox();})
+            .BorderImage_Lambda([Char,Index]{const auto* C=Char();return C && C->GetHotbarArmedSlot()==Index?Marau6UI::SlotBoxSelected():Marau6UI::SlotBox();})
             [SNew(SOverlay)
                 +SOverlay::Slot().Padding(bWeapon?FMargin(10,8,10,18):FMargin(8,14,8,14))[SNew(SMarau6ItemIcon)
                     .Kind_Lambda([Item,Index]{const auto* I=Item(Index);return I?static_cast<int32>(I->Kind):-1;})
                     .Texture_Lambda([Self,Index]{return Self.IsValid()?Self->IconFor(Index):nullptr;})]
                 +SOverlay::Slot().HAlign(HAlign_Left).VAlign(VAlign_Top).Padding(6,4,0,0)
-                    [Live([Index,bWeapon]{return bWeapon?FString(TEXT("ARMA")):FString::Printf(TEXT("%02d"),Index+1);},Marau6UI::Mono(6.5f),Fixed(Marau6UI::Muted()))]
+                    [Live([Index,bWeapon]{return bWeapon?FString(TEXT("ARMA")):FString::Printf(TEXT("%d"),Index+1);},bWeapon?Marau6UI::Mono(6.5f):Marau6UI::Font(TEXT("Medium"),8.5f),Fixed(bWeapon?Marau6UI::Muted():Marau6UI::Text()))]
                 +SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
                     [SNew(SBox).Visibility_Lambda([Item,Index]{return Item(Index)?EVisibility::Collapsed:EVisibility::HitTestInvisible;})[Live([]{return FString(TEXT("\u2014"));},Marau6UI::Font(TEXT("Regular"),11),Fixed(Marau6UI::Muted()))]]
                 +SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0,0,0,4)
@@ -130,13 +130,24 @@ TSharedRef<SWidget> UMarau6HUDWidget::RebuildWidget()
     };
     auto Slots=SNew(SHorizontalBox)+SHorizontalBox::Slot().AutoWidth().Padding(0,0,10,0)[Cell(Marau6Slots::Weapon,150)];
     for(int32 Index=0;Index<Marau6Slots::BackpackCount;Index++)Slots->AddSlot().AutoWidth().Padding(Index?6:0,0,0,0)[Cell(Index,68)];
-    auto Hotbar=SNew(SBorder).BorderImage(Marau6UI::Panel()).Padding(FMargin(10,10,16,10))[SNew(SHorizontalBox)
+    auto HotbarHint=[Char]
+    {
+        const auto* C=Char();if(!C)return FString();
+        const FString Notice=C->GetHotbarNotice();if(!Notice.IsEmpty())return Notice.ToUpper();
+        const int32 Armed=C->GetHotbarArmedSlot();const auto* I=Armed>=0?C->GetInventory()->ItemAt(Armed):nullptr;
+        const FString Action=I?FMarau6InventoryUIModel::HotbarAction(*I):FString();
+        return Action.IsEmpty()?FString():FString::Printf(TEXT("%d DE NOVO \u00B7 %s"),Armed+1,*Action);
+    };
+    auto Hotbar=SNew(SVerticalBox)
+        +SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0,0,0,8)[SNew(SBox).Visibility_Lambda([HotbarHint]{return HotbarHint().IsEmpty()?EVisibility::Hidden:EVisibility::HitTestInvisible;})
+            [SNew(SBorder).BorderImage(Marau6UI::Panel()).Padding(FMargin(12,5))[Live(HotbarHint,Marau6UI::Mono(7.5f),Fixed(Marau6UI::Brass()))]]]
+        +SVerticalBox::Slot().AutoHeight()[SNew(SBorder).BorderImage(Marau6UI::Panel()).Padding(FMargin(10,10,16,10))[SNew(SHorizontalBox)
         +SHorizontalBox::Slot().AutoWidth()[Slots]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(22,0,0,0)[SNew(SHorizontalBox)
             +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Cap(TEXT("TAB"),48)]
             +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(10,0,0,0)[SNew(SVerticalBox)
                 +SVerticalBox::Slot().AutoHeight()[Label(TEXT("INVENT\u00C1RIO"),Marau6UI::Font(TEXT("Regular"),10.5f,40),Marau6UI::Text())]
-                +SVerticalBox::Slot().AutoHeight().Padding(0,3,0,0)[Label(TEXT("ABRIR / FECHAR"),Marau6UI::Mono(6.5f),Marau6UI::Muted())]]]];
+                +SVerticalBox::Slot().AutoHeight().Padding(0,3,0,0)[Label(TEXT("ABRIR / FECHAR"),Marau6UI::Mono(6.5f),Marau6UI::Muted())]]]]];
 
     // Ammo: magazine against capacity, then everything carried (reserve plus unopened boxes).
     auto Armed=[Char]{const auto* C=Char();return C && C->IsAlive() && C->HasEquippedRifle();};

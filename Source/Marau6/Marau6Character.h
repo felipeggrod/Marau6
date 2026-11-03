@@ -206,6 +206,9 @@ protected:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6Footsteps> Footsteps;
     bool bInventoryOpen=false;
     int32 SelectedInventorySlot=0;
+    int32 HotbarArmed=INDEX_NONE;
+    FString HotbarNotice;
+    double HotbarNoticeAt=-100;
     FGuid InventoryMoveSource;
     void ToggleInventory();
     void NextInventorySlot();
@@ -266,6 +269,10 @@ public:
     void SelectInventorySlot(int32 Slot) { if(Slot>=0 && Slot<11)SelectedInventorySlot=Slot; }
     void CancelInventorySelection() { InventoryMoveSource.Invalidate(); }
     void ToggleInventoryFromUI() { ToggleInventory(); }
+    /** Hotbar keys 1-8: the first press arms a backpack slot, a second press uses its item. */
+    void HotbarKey(int32 Slot);
+    int32 GetHotbarArmedSlot() const { return !bInventoryOpen && HotbarArmed==SelectedInventorySlot?HotbarArmed:INDEX_NONE; }
+    FString GetHotbarNotice() const;
     void InventoryShortcut(FKey Key);
     void CloseInventoryFromUI() { bInventoryOpen=false;InventoryMoveSource.Invalidate(); }
     void RequestInventoryMove(FGuid Id,int32 Destination);

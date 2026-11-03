@@ -9,12 +9,11 @@ class UPointLightComponent;
 class USkeletalMeshComponent;
 class UMaterialInstanceDynamic;
 class UMaterialBillboardComponent;
-class USoundAttenuation;
 
 /**
  * Cosmetic, client-only presentation of one accepted shot, layered on top of
- * AMarau6ShotEffect: a textured muzzle flash and light, puffs of muzzle smoke,
- * the rifle report, a tracer and a smoke trail along the server's hit line, and
+ * AMarau6ShotEffect (which plays the shot sound): a textured muzzle flash and light,
+ * puffs of muzzle smoke, a tracer and a smoke trail along the server's hit line, and
  * an impact that is dust, sparks and a bullet hole on surfaces or blood on characters.
  */
 UCLASS()
@@ -47,8 +46,6 @@ private:
     UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> DropMaterial;
     UPROPERTY() TArray<TObjectPtr<UMaterialBillboardComponent>> MuzzleSmoke;
     UPROPERTY() TArray<TObjectPtr<UMaterialInstanceDynamic>> MuzzleSmokeMaterials;
-    UPROPERTY() TObjectPtr<USoundAttenuation> ReportAttenuation;
-    UPROPERTY() TObjectPtr<USoundAttenuation> OwnerReportAttenuation;
 
     FVector TrailStart = FVector::ZeroVector;
     FVector TrailDirection = FVector::ForwardVector;

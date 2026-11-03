@@ -1,6 +1,10 @@
 # Som provisório de disparo
 
-O tiro usa `/Game/Marau6/Audio/S_Shot_Uzi`, o som da Uzi do TogetherWEB (`public/audio/shot_smg.mp3`, convertido para WAV mono 16-bit 44,1kHz). Substituiu o FirstPersonTemplateWeaponFire02 do template em 02/11/2026.
+O tiro usa `/Game/Marau6/Audio/S_RifleFire` como único som (0,86s, -21 LUFS), convertido do clipe fornecido `rifle_fire_sfx.mp3` para WAV mono 16-bit 44,1kHz:
+
+`ffmpeg -i rifle_fire_sfx.mp3 -ac 1 -ar 44100 -c:a pcm_s16le Saved/SourceAudio/S_RifleFire.wav`, depois `Marau6.SetupShotFX` com o editor fechado.
+
+Substituiu em 02/11/2026 as duas camadas anteriores (Uzi `S_Shot_Uzi` e `S_RifleShot` sintetizado em `AMarau6ShotFX`), que não tocam mais. Volume 0,88 dono / 1,05 outros, no nível da antiga dupla.
 
 AMarau6ShotEffect::Present toca uma única alternativa de áudio: PlaySound2D para o dono (volume 0,85, não marcado como som de interface), ou PlaySoundAtLocation na boca do rifle em terceira pessoa para outros clientes (volume 1). Pitch aleatório 0,95–1,05 a cada tiro, como no TogetherWEB. Atenuação linear esférica: volume estável nos primeiros3m e queda até silêncio em80m. Esses valores são provisórios. Não há oclusão por paredes nesta etapa.
 
@@ -28,7 +32,7 @@ Todos os sons alimentam esse reverb. Os do próprio jogador (tiro, passos, pulo,
 
 ## Mixagem (03/11/2026)
 
-A Uzi e `S_RifleShot` (efeitos do disparo) tocam no mesmo volume: as duas fontes têm a mesma sonoridade (-18 LUFS). Volumes em `Marau6Audio.h`: cada camada 0,45 dono / 0,54 outros (juntas, o mesmo nível de antes), mesma queda com a distância (3 m a 80 m); passos 0,5 / 1,0; aterrissagem 0,8; pulo 0,6. Os passos são ~15 dB mais baixos na origem que a Uzi, por isso ficam perto do volume cheio. Tiros de outros jogadores caem em dB com a distância (NaturalSound, -60 dB no limite): tiroteio a 20 m fica bem abaixo do volume cheio e não cobre os passos próximos. A camada do rifle do dono também passou a alimentar o reverb.
+(Histórico: substituído por `S_RifleFire`, ver topo.) A Uzi e `S_RifleShot` (efeitos do disparo) tocavam no mesmo volume: as duas fontes têm a mesma sonoridade (-18 LUFS). Volumes em `Marau6Audio.h`: cada camada 0,45 dono / 0,54 outros (juntas, o mesmo nível de antes), mesma queda com a distância (3 m a 80 m); passos 0,5 / 1,0; aterrissagem 0,8; pulo 0,6. Os passos são ~15 dB mais baixos na origem que a Uzi, por isso ficam perto do volume cheio. Tiros de outros jogadores caem em dB com a distância (NaturalSound, -60 dB no limite): tiroteio a 20 m fica bem abaixo do volume cheio e não cobre os passos próximos. A camada do rifle do dono também passou a alimentar o reverb.
 
 ## Descompressão na entrada da partida (03/11/2026)
 

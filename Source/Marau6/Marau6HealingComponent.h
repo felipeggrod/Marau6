@@ -18,6 +18,8 @@ class UMarau6HealingComponent : public UActorComponent
 public:
     UMarau6HealingComponent();
     void UseSelected();
+    /** Hotbar use of a specific supply; cancels an ongoing treatment instead. */
+    void UseItem(FGuid Item);
     UFUNCTION(Server,Reliable) void ServerUse(FGuid Item);
     UFUNCTION(Server,Reliable) void ServerCancel();
     bool IsHealing() const { return bHealing; }

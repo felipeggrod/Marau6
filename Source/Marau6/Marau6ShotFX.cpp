@@ -1,5 +1,4 @@
 #include "Marau6ShotFX.h"
-#include "Marau6Audio.h"
 #include "Components/DecalComponent.h"
 #include "Components/MaterialBillboardComponent.h"
 #include "Components/PointLightComponent.h"
@@ -12,8 +11,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
-#include "Sound/SoundAttenuation.h"
-#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 
 // Inspection aid for Marau6.CaptureViewModel: a non-negative value freezes every shot effect at that age.
@@ -40,7 +37,6 @@ const TCHAR* SmokePath = TEXT("/Game/Marau6/Effects/M_ShotSmoke.M_ShotSmoke");
 const TCHAR* PuffPath = TEXT("/Game/Marau6/Effects/M_ImpactPuff.M_ImpactPuff");
 const TCHAR* HolePath = TEXT("/Game/Marau6/Effects/M_BulletHole.M_BulletHole");
 const TCHAR* BloodPath = TEXT("/Game/Marau6/Effects/M_BloodDecal.M_BloodDecal");
-const TCHAR* ReportPath = TEXT("/Game/Marau6/Audio/S_RifleShot.S_RifleShot");
 
 template<typename T> T* Load(const TCHAR* Path) { return LoadObject<T>(nullptr, Path, nullptr, LOAD_NoWarn | LOAD_Quiet); }
 
@@ -110,13 +106,6 @@ AMarau6ShotFX::AMarau6ShotFX()
         Sprite->SetVisibility(false);
         MuzzleSmoke.Add(Sprite);
     }
-
-    // Layered with the Uzi shot at the same level and falloff (Marau6Audio).
-    ReportAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("ReportAttenuation"));
-    Marau6Audio::ConfigureGunfireFalloff(ReportAttenuation->Attenuation, Marau6Audio::GunfireInner, Marau6Audio::GunfireFalloff);
-    Marau6Audio::ConfigureDistanceSend(ReportAttenuation->Attenuation, .3f, .8f);
-    OwnerReportAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("OwnerReportAttenuation"));
-    Marau6Audio::ConfigureOwnerSend(OwnerReportAttenuation->Attenuation, .3f);
 }
 
 void AMarau6ShotFX::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson, const FVector& End, const FVector& Normal,
@@ -129,15 +118,6 @@ void AMarau6ShotFX::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson, co
     }
     const bool bMuzzle = Rifle->DoesSocketExist(TEXT("Muzzle"));
     const FVector Muzzle = bMuzzle ? Rifle->GetSocketLocation(TEXT("Muzzle")) : Rifle->GetComponentLocation();
-
-    if (USoundBase* Report = Load<USoundBase>(ReportPath))
-    {
-        const float Pitch = FMath::FRandRange(.96f, 1.04f);
-        if (bFirstPerson) UGameplayStatics::PlaySoundAtLocation(this, Report, Muzzle, FRotator::ZeroRotator,
-            Marau6Audio::ReportOwner, Pitch, 0.f, OwnerReportAttenuation);
-        else UGameplayStatics::PlaySoundAtLocation(this, Report, Muzzle, FRotator::ZeroRotator,
-            Marau6Audio::ReportWorld, Pitch, 0.f, ReportAttenuation);
-    }
 
     UMaterialInterface* FlashMaterial = Load<UMaterialInterface>(FlashPath);
     UMaterialInterface* TracerMaterial = Load<UMaterialInterface>(TracerPath);

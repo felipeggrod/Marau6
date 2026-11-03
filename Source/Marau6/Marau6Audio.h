@@ -9,12 +9,11 @@ namespace Marau6Audio
     inline const FName AmbientReverbTag(TEXT("Marau6Ambient"));
     static constexpr float AmbientReverbVolume = .5f;
 
-    // Mix. The Uzi clip and the synthesized rifle report are equally loud at the
-    // source (-18 LUFS), so they share one volume and one falloff; together they
-    // keep the gunfire level the footsteps were balanced against.
-    // Footsteps are ~15 dB quieter at the source than the Uzi, so they sit near full volume.
-    static constexpr float ShotOwner = .45f, ShotWorld = .54f;
-    static constexpr float ReportOwner = ShotOwner, ReportWorld = ShotWorld;
+    // Mix. The rifle fire clip (S_RifleFire, -21 LUFS) is the only gunfire sound. It
+    // is raised to the level of the old Uzi + report pair (two -18 LUFS layers at
+    // .45/.54) that the footsteps were balanced against.
+    // Footsteps are ~15 dB quieter at the source than gunfire, so they sit near full volume.
+    static constexpr float ShotOwner = .88f, ShotWorld = 1.05f;
     static constexpr float GunfireInner = 300.f, GunfireFalloff = 7700.f;
     static constexpr float StepOwner = .5f, StepWorld = 1.f;
     static constexpr float LandVolume = .8f, JumpVolume = .6f;

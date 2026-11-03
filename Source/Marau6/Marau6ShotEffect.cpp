@@ -17,7 +17,7 @@ AMarau6ShotEffect::AMarau6ShotEffect()
     PrimaryActorTick.bCanEverTick = false;
     bReplicates = false;
     static ConstructorHelpers::FObjectFinder<USoundBase> Sound(
-        TEXT("/Game/Marau6/Audio/S_Shot_Uzi.S_Shot_Uzi"));
+        TEXT("/Game/Marau6/Audio/S_RifleFire.S_RifleFire"));
     ShotSound = Sound.Object;
     ShotAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("ShotAttenuation"));
     Marau6Audio::ConfigureGunfireFalloff(ShotAttenuation->Attenuation, Marau6Audio::GunfireInner, Marau6Audio::GunfireFalloff);

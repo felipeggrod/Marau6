@@ -43,5 +43,7 @@ struct FMarau6InventoryUIModel
     /** Short code and category shown inside a slot, e.g. MED / SUPRIMENTOS. */
     static FString ShortLabel(const FMarau6Item& Item);
     static FString Category(const FMarau6Item& Item);
+    /** What a second hotbar press does with the item; empty when it has no raid use. */
+    static FString HotbarAction(const FMarau6Item& Item);
     static FMarau6ItemInspection Inspect(const FMarau6Item* Item,int32 Slot);
 };
