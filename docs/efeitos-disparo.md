@@ -1,3 +1,5 @@
+> Atualização 03/11/2026: o clarão esférico e o brilho de impacto descritos abaixo foram removidos; o clarão, as faíscas e os impactos agora são de `AMarau6ShotFX` (ver docs/sensacao-arma.md). `AMarau6ShotEffect` só toca o som do tiro.
+
 # Efeitos provisórios de disparo
 
 O servidor mantém a decisão de disparar e acertar. Apenas após aceitar o disparo, envia um multicast cosmético não confiável com ponto, normal e existência de impacto. ServerFire continua sem parâmetros enviados pelo cliente.

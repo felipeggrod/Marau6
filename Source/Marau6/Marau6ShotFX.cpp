@@ -7,6 +7,7 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
 #include "Engine/World.h"
+#include "Camera/PlayerCameraManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -20,6 +21,12 @@ static TAutoConsoleVariable<float> CVarShotFXAge(TEXT("Marau6.ShotFXAge"), -1.f,
 namespace
 {
 constexpr float FlashSeconds = .05f;
+// The glow burst is wider, softer and gone sooner than the blades.
+constexpr float GlowSeconds = .035f;
+constexpr float GlowDecay = 45.f;        // 1/s; ~45% left one frame in at 60 fps.
+constexpr float GlowPeak = 6.f;          // M_MuzzleGlow Intensity at the instant of the shot.
+constexpr float OwnerGlowFactor = .6f;   // The owner's glow is fainter so the sights stay readable.
+constexpr int32 MuzzleSparkCount = 5;
 constexpr float TracerSpeed = 50000.f;   // cm/s; reads as a streak rather than a beam.
 constexpr float TracerLength = 150.f;
 constexpr float SmokeSeconds = 1.4f;
@@ -31,6 +38,7 @@ const FVector Gravity(0.f, 0.f, -980.f);
 const TCHAR* FlashPath = TEXT("/Game/Marau6/Effects/M_MuzzleFlash.M_MuzzleFlash");
 const TCHAR* FlashSidePath = TEXT("/Game/Marau6/Effects/T_MuzzleFlash_Side.T_MuzzleFlash_Side");
 const TCHAR* FlashFrontPath = TEXT("/Game/Marau6/Effects/T_MuzzleFlash_Front.T_MuzzleFlash_Front");
+const TCHAR* GlowPath = TEXT("/Game/Marau6/Effects/M_MuzzleGlow.M_MuzzleGlow");
 const TCHAR* MuzzleSmokePath = TEXT("/Game/Marau6/Effects/M_MuzzleSmoke.M_MuzzleSmoke");
 const TCHAR* TracerPath = TEXT("/Game/Marau6/Effects/M_Tracer.M_Tracer");
 const TCHAR* SmokePath = TEXT("/Game/Marau6/Effects/M_ShotSmoke.M_ShotSmoke");
@@ -97,6 +105,11 @@ AMarau6ShotFX::AMarau6ShotFX()
         Blade->SetRelativeTransform(Blades[Index]);
         FlashPlanes.Add(Blade);
     }
+    // A soft additive disc a little ahead of the blades, turned to the viewer each
+    // frame, so the burst reads bigger than the flame itself. Engine plane: 100 units square.
+    FlashGlow = MakeCosmeticMesh(this, TEXT("MuzzleGlow"), Plane.Object, FlashRoot);
+    FlashGlow->SetRelativeTransform(FTransform(FRotator::ZeroRotator, FVector(12, 0, 0), FVector(.6, .6, 1)));
+    // Only the illumination: a point light draws no geometry and has no source radius here.
     FlashLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("FlashLight"));
     FlashLight->SetupAttachment(FlashRoot);
     FlashLight->SetRelativeLocation(FVector(8, 0, 0));
@@ -106,6 +119,8 @@ AMarau6ShotFX::AMarau6ShotFX()
     FlashLight->SetLightColor(FLinearColor(1.f, .6f, .3f));
     FlashLight->SetCastShadows(false);
 
+    for (int32 Index = 0; Index < MuzzleSparkCount; ++Index)
+        MuzzleSparks.Add(MakeCosmeticMesh(this, *FString::Printf(TEXT("MuzzleSpark%d"), Index), Cylinder.Object, GetRootComponent()));
     Tracer = MakeCosmeticMesh(this, TEXT("Tracer"), Cylinder.Object, GetRootComponent());
     Smoke = MakeCosmeticMesh(this, TEXT("Smoke"), Cylinder.Object, GetRootComponent());
     Puff = CreateDefaultSubobject<UMaterialBillboardComponent>(TEXT("ImpactPuff"));
@@ -127,6 +142,7 @@ AMarau6ShotFX::AMarau6ShotFX()
 void AMarau6ShotFX::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson, const FVector& End, const FVector& Normal,
     bool bBlockingHit, bool bHitCharacter, const FVector& ViewOrigin, float FirstPersonScale)
 {
+    ShotViewOrigin = ViewOrigin;
     if (!GetWorld() || GetNetMode() == NM_DedicatedServer || !Rifle)
     {
         Destroy();
@@ -160,6 +176,16 @@ void AMarau6ShotFX::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson, co
             Blade->SetVisibility(bFlash);
         }
         FlashLight->SetIntensity(80.f);
+
+        FlashGlow->FirstPersonPrimitiveType = FlashPlanes[0]->FirstPersonPrimitiveType;
+        if (UMaterialInterface* GlowBase = Load<UMaterialInterface>(GlowPath))
+        {
+            FlashGlowMaterial = FlashGlow->CreateDynamicMaterialInstance(0, GlowBase);
+            GlowIntensity = GlowPeak * (bFirstPerson ? OwnerGlowFactor : 1.f);
+            FlashGlowMaterial->SetScalarParameterValue(TEXT("Intensity"), GlowIntensity);
+            FaceGlowToView();
+        }
+        FlashGlow->SetVisibility(FlashGlowMaterial != nullptr);
     }
 
     // The owner's rifle is drawn scaled toward the camera; start the world-space
@@ -169,6 +195,23 @@ void AMarau6ShotFX::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson, co
     TrailLength = Line.Size();
     TrailDirection = Line.GetSafeNormal();
     if (TracerMaterial) Tracer->SetMaterial(0, TracerMaterial);
+
+    // A few hot streaks thrown out of the muzzle in a narrow cone, in world space
+    // from the drawn muzzle like the smoke; the owner's are scaled and dimmer.
+    SparkScale = bFirstPerson ? FirstPersonScale : 1.f;
+    if (bMuzzle && TracerMaterial)
+    {
+        UMaterialInstanceDynamic* SparkLook = UMaterialInstanceDynamic::Create(TracerMaterial, this);
+        SparkLook->SetScalarParameterValue(TEXT("Intensity"), bFirstPerson ? 12.f : 25.f);
+        for (UStaticMeshComponent* Spark : MuzzleSparks)
+        {
+            Spark->SetMaterial(0, SparkLook);
+            FMuzzleSpark Streak;
+            Streak.Velocity = (TrailDirection + FMath::VRand() * .35f).GetSafeNormal() * FMath::FRandRange(900.f, 1800.f) * SparkScale;
+            Streak.Seconds = FMath::FRandRange(.04f, .09f);
+            Sparks.Add(Streak);
+        }
+    }
     if (UMaterialInterface* SmokeBase = Load<UMaterialInterface>(SmokePath))
         SmokeMaterial = Smoke->CreateDynamicMaterialInstance(0, SmokeBase);
 
@@ -256,6 +299,22 @@ void AMarau6ShotFX::Tick(float DeltaSeconds)
 
     for (UStaticMeshComponent* Blade : FlashPlanes) Blade->SetVisibility(bFlash && Age <= FlashSeconds);
     FlashLight->SetIntensity(80.f * FMath::Exp(-Age * 60.f));
+    const bool bGlow = FlashGlowMaterial && Age <= GlowSeconds;
+    FlashGlow->SetVisibility(bGlow);
+    if (bGlow)
+    {
+        FaceGlowToView();
+        FlashGlowMaterial->SetScalarParameterValue(TEXT("Intensity"), GlowIntensity * FMath::Exp(-Age * GlowDecay));
+    }
+    for (int32 Index = 0; Index < Sparks.Num(); ++Index)
+    {
+        const FMuzzleSpark& Streak = Sparks[Index];
+        const bool bAlive = Age < Streak.Seconds;
+        MuzzleSparks[Index]->SetVisibility(bAlive);
+        if (!bAlive) continue;
+        const FVector SparkHead = TrailStart + TrailDirection * 3.f * SparkScale + Streak.Velocity * Age;
+        PlaceTube(MuzzleSparks[Index], SparkHead - Streak.Velocity * .012f, SparkHead, .25f * SparkScale);
+    }
 
     const float Head = FMath::Min(Age * TracerSpeed, TrailLength);
     const float Tail = FMath::Max(0.f, Age * TracerSpeed - TracerLength);
@@ -353,6 +412,17 @@ void AMarau6ShotFX::SpawnDecals()
         // Blood reads faint at its painted alpha; push coverage so the splat stays legible.
         ShowRandomTile(UGameplayStatics::SpawnDecalAtLocation(World, Blood, FVector(8.f, Size * 1.6f, Size * 1.6f), Hit.ImpactPoint, Facing, 30.f), 2.f);
     }
+}
+
+void AMarau6ShotFX::FaceGlowToView()
+{
+    // The local player's camera when there is one (it moves on during the burst),
+    // otherwise the view the shot was presented from.
+    const APlayerCameraManager* Camera = UGameplayStatics::GetPlayerCameraManager(this, 0);
+    const FVector View = Camera ? Camera->GetCameraLocation() : ShotViewOrigin;
+    const FVector ToView = View - FlashGlow->GetComponentLocation();
+    if (!ToView.IsNearlyZero())
+        FlashGlow->SetWorldRotation(FRotationMatrix::MakeFromZ(ToView.GetSafeNormal()).Rotator());
 }
 
 void AMarau6ShotFX::PlaceTube(UStaticMeshComponent* Tube, const FVector& From, const FVector& To, float Radius)

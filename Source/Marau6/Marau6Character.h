@@ -105,7 +105,11 @@ class AMarau6Character : public ACharacter
 
     /** Upward and maximum sideways camera kick per accepted shot, in degrees. */
     UPROPERTY(EditDefaultsOnly, Category = "Combat")
-    FVector2D RecoilKick = FVector2D(0.55, 0.2);
+    FVector2D RecoilKick = FVector2D(1.3, 0.45);
+
+    /** Share of each upward kick that settles back on its own right after the shot. */
+    UPROPERTY(EditDefaultsOnly, Category = "Combat")
+    float RecoilSettle = 0.35f;
 
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
@@ -167,6 +171,9 @@ protected:
     /** Owner's clock for the staged first person reload; negative when not reloading. */
     double ReloadPoseStart = -1.0;
     float ShotKick = 0.f;
+    float KickRoll = 0.f;
+    float RecoilRecovery = 0.f;
+    double LastShotTime = -1.0;
     FRotator SwayRotation = FRotator::ZeroRotator;
     FRotator LastViewRotation = FRotator::ZeroRotator;
     FRotator PendingRecoil = FRotator::ZeroRotator;

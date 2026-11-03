@@ -312,6 +312,26 @@ void Setup()
         AtlasSample(Flash, FlashSide, Add<UMaterialExpressionTextureCoordinate>(Flash)),
         Color(Flash, FLinearColor(1.f, .9f, .8f))), Scalar(Flash, TEXT("Intensity"), 14.f)));
 
+    // The glow burst around the blades: a soft orange disc with a hotter, whiter core,
+    // no texture. Faded where it cuts into the rifle or a wall so no edge shows.
+    // Intensity is driven per frame by AMarau6ShotFX.
+    UMaterial* Burst = Create(TEXT("M_MuzzleGlow"), BLEND_Additive);
+    {
+        UMaterialExpression* Disc = RadialMask(Burst);
+        auto* Core = Add<UMaterialExpressionPower>(Burst);
+        Core->Base.Connect(0, Disc);
+        Core->ConstExponent = 4.f;
+        auto* White = Add<UMaterialExpressionConstant3Vector>(Burst);
+        White->Constant = FLinearColor(1.5f, 1.3f, 1.f);
+        auto* Light = Add<UMaterialExpressionAdd>(Burst);
+        Light->A.Connect(0, Mul(Burst, Disc, Color(Burst, FLinearColor(1.f, .55f, .25f))));
+        Light->B.Connect(0, Mul(Burst, Core, White));
+        auto* Edge = Add<UMaterialExpressionDepthFade>(Burst);
+        Edge->FadeDistanceDefault = 6.f;
+        Burst->GetEditorOnlyData()->EmissiveColor.Connect(0,
+            Mul(Burst, Mul(Burst, Light, Scalar(Burst, TEXT("Intensity"), 6.f)), Edge));
+    }
+
     // Muzzle smoke sprites, swelled by Grow (see GrowUV).
     UMaterial* Muzzle = Create(TEXT("M_MuzzleSmoke"), BLEND_Translucent);
     Muzzle->SetShadingModel(MSM_DefaultLit);
@@ -382,7 +402,7 @@ void Setup()
     UMaterial* Blood = Decal(TEXT("M_BloodDecal"), BloodSplatter, nullptr, FLinearColor::White, .08f, .6f);
 
     bool bSaved = true;
-    for (UMaterial* M : { Flash, Muzzle, Tracer, Smoke, Puff, Drop, Hole, Blood }) bSaved &= Save(M);
+    for (UMaterial* M : { Flash, Burst, Muzzle, Tracer, Smoke, Puff, Drop, Hole, Blood }) bSaved &= Save(M);
     if (!bSaved || !ImportSound(TEXT("S_RifleFire.wav"), TEXT("the ffmpeg conversion in docs/som-disparo.md"))
         || !ImportSound(TEXT("S_Decompression.wav"), TEXT("scripts/Generate-Decompression.py")))
         UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX asset generation failed."));

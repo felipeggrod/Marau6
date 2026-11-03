@@ -2,6 +2,8 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/ScopeExit.h"
 #include "Marau6Character.h"
+#include "Marau6ShotFX.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -37,22 +39,33 @@ bool FMarau6ShotEffectsTest::RunTest(const FString& Parameters)
     AActor* Effect = Items[0];
     TestFalse(TEXT("Cosmetic actor does not replicate"), Effect->GetIsReplicated());
     TestTrue(TEXT("Effect has bounded lifespan"), Effect->GetLifeSpan() > 0 && Effect->GetLifeSpan() < 1);
-    auto* Flash = FindObject<UStaticMeshComponent>(Effect, TEXT("MuzzleFlash"));
-    auto* Impact = FindObject<UStaticMeshComponent>(Effect, TEXT("Impact"));
-    if (!TestNotNull(TEXT("Flash component"), Flash) || !TestNotNull(TEXT("Impact component"), Impact)) return false;
-    TestNotNull(TEXT("Flash mesh"), Flash->GetStaticMesh().Get());
-    TestNotNull(TEXT("Flash material"), Flash->GetMaterial(0));
-    TestEqual(TEXT("Flash at muzzle socket"), Flash->GetAttachSocketName(), FName("Muzzle"));
-    TestTrue(TEXT("Blocking hit shows impact"), Impact->IsVisible());
-    TestEqual(TEXT("Flash no collision"), Flash->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
-    TestEqual(TEXT("Impact no collision"), Impact->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+    // The sound actor draws nothing: the flash and impact belong to AMarau6ShotFX.
+    TArray<UStaticMeshComponent*> Meshes;
+    Effect->GetComponents(Meshes);
+    TestEqual(TEXT("Shot sound actor draws no mesh (no glow sphere)"), Meshes.Num(), 0);
+    AMarau6ShotFX* FX = nullptr;
+    for (TActorIterator<AMarau6ShotFX> It(World); It; ++It) FX = *It;
+    if (!TestNotNull(TEXT("Accepted shot creates the shot FX"), FX)) return false;
+    FX->GetComponents(Meshes);
+    UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+    TestFalse(TEXT("No shot FX part is a sphere"), Meshes.ContainsByPredicate(
+        [Sphere](const UStaticMeshComponent* Mesh) { return Mesh->GetStaticMesh() == Sphere; }));
+    auto* Glow = FindObject<UStaticMeshComponent>(FX, TEXT("MuzzleGlow"));
+    auto* Blade = FindObject<UStaticMeshComponent>(FX, TEXT("FlashBlade0"));
+    if (!TestNotNull(TEXT("Muzzle glow layer"), Glow) || !TestNotNull(TEXT("Flash blade"), Blade)) return false;
+    TestTrue(TEXT("Glow rides the flash at the muzzle"), Glow->GetAttachParent() == Blade->GetAttachParent()
+        && Glow->GetAttachParent()->GetAttachSocketName() == FName("Muzzle"));
+    TestTrue(TEXT("Glow shows with the shot (run Marau6.SetupShotFX for M_MuzzleGlow)"), Glow->IsVisible());
+    // This world's controller has no local player, so the shot is drawn as seen by others;
+    // the glow must use whichever first/third person mode the blades use.
+    TestEqual(TEXT("Glow drawn in the same perspective as the blades"),
+        Glow->FirstPersonPrimitiveType, Blade->FirstPersonPrimitiveType);
+    TestEqual(TEXT("Glow no collision"), Glow->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
     Fire(); TestEqual(TEXT("Cooldown rejection creates no effect"), Effects().Num(), 1);
     ++GFrameCounter; World->Tick(LEVELTICK_TimeOnly, .3f); World->GetTimerManager().Tick(.3f);
     TestEqual(TEXT("Transient effects are cleaned up"), Effects().Num(), 0);
     PC->SetControlRotation(FRotator(0,90,0)); Fire(); Items = Effects();
     if (!TestEqual(TEXT("Air shot creates flash"), Items.Num(), 1)) return false;
-    Impact = FindObject<UStaticMeshComponent>(Items[0], TEXT("Impact"));
-    TestFalse(TEXT("Air shot has no fake impact"), Impact->IsVisible());
     ++GFrameCounter; World->Tick(LEVELTICK_TimeOnly, .3f); World->GetTimerManager().Tick(.3f);
     Shooter->ProcessEvent(Shooter->FindFunctionChecked(TEXT("ServerReload")), nullptr);
     Fire(); TestEqual(TEXT("Reload rejection creates no effect"), Effects().Num(), 0);
