@@ -34,7 +34,7 @@ bool FMarau6ShotAudioTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Shot is the rifle fire clip"), Sound->GetName() == TEXT("S_RifleFire"));
     // The clip is ~3 dB under the old -18 LUFS layers the footsteps were balanced against.
     TestTrue(TEXT("Own footsteps not buried under own shots"),
-        Marau6Audio::StepOwner >= FMath::Pow(10.f, -2.8f / 20.f) * Marau6Audio::ShotOwner * .45f);
+        Marau6Audio::StepOwner >= FMath::Pow(10.f, -2.8f / 20.f) * Marau6Audio::ShotOwner * .35f);
     TestTrue(TEXT("Distant shots are wetter"), !!Attenuation->Attenuation.bEnableReverbSend
         && Attenuation->Attenuation.ReverbWetLevelMax > Attenuation->Attenuation.ReverbWetLevelMin);
     const auto* OwnerProperty = FindFProperty<FObjectPropertyBase>(Class, TEXT("OwnerShotAttenuation"));

@@ -22,6 +22,8 @@ public:
     float GetHealth() const { return Health; }
     bool IsAlive() const { return Health>0; }
     EMarau6BotState GetBotState() const { return State; }
+    /** Dead bots stay as ragdolls this long (5 min); a new round clears them anyway. */
+    static constexpr float CorpseSeconds = 300.f;
     FGuid GetLootId() const { return LootId; }
     int32 GetShotCount() const { return ShotCount; }
     FVector GetLastSeen() const { return LastSeen; }

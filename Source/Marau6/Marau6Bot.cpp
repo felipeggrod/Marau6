@@ -117,7 +117,7 @@ float AMarau6Bot::TakeDamage(float Damage,const FDamageEvent& Event,AController*
         if(GetWorld()->LineTraceSingleByChannel(Floor,GetActorLocation(),GetActorLocation()-FVector(0,0,500),ECC_Visibility,Q))Point=Floor.ImpactPoint+FVector(0,0,25);
         auto* Ledger=GetWorld()->GetSubsystem<UMarau6ItemLedger>();if(!Ledger || !Ledger->GrantWorld(LootId,EMarau6ItemKind::Scrap,Point))return 0;
         Health=0;State=EMarau6BotState::Dead;Target.Reset();if(auto* AI=Cast<AAIController>(GetController())){AI->ClearFocus(EAIFocusPriority::Gameplay);AI->StopMovement();}
-        GetCharacterMovement()->DisableMovement();OnRep_State();SetLifeSpan(8);
+        GetCharacterMovement()->DisableMovement();OnRep_State();SetLifeSpan(CorpseSeconds);
     }
     else Health-=Applied;
     ForceNetUpdate();Super::TakeDamage(Applied,Event,DamageInstigator,Causer);return Applied;

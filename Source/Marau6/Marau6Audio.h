@@ -13,8 +13,8 @@ namespace Marau6Audio
     // is raised to the level of the old Uzi + report pair (two -18 LUFS layers at
     // .45/.54) that the footsteps were balanced against.
     // Footsteps are ~15 dB quieter at the source than gunfire, so they sit near full volume.
-    // Raised about 6 dB on request (was .88 / 1.05): gunfire should dominate.
-    static constexpr float ShotOwner = 1.8f, ShotWorld = 2.1f;
+    // Raised on request, twice (.88/1.05, then 1.8/2.1): gunfire should dominate.
+    static constexpr float ShotOwner = 3.0f, ShotWorld = 3.5f;
     static constexpr float GunfireInner = 300.f, GunfireFalloff = 7700.f;
     static constexpr float StepOwner = .8f, StepWorld = 1.4f;
     static constexpr float LandVolume = .8f, JumpVolume = .6f;

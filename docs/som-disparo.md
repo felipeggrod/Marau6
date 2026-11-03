@@ -4,7 +4,7 @@ O tiro usa `/Game/Marau6/Audio/S_RifleFire` como único som (0,86s, -21 LUFS), c
 
 `ffmpeg -i rifle_fire_sfx.mp3 -ac 1 -ar 44100 -c:a pcm_s16le Saved/SourceAudio/S_RifleFire.wav`, depois `Marau6.SetupShotFX` com o editor fechado.
 
-Substituiu em 02/11/2026 as duas camadas anteriores (Uzi `S_Shot_Uzi` e `S_RifleShot` sintetizado em `AMarau6ShotFX`), que não tocam mais. Volume 1,8 dono / 2,1 outros (cerca de +6 dB sobre o nível da antiga dupla, a pedido: o tiro deve dominar); passos subiram para 0,8 / 1,4 para não sumirem.
+Substituiu em 02/11/2026 as duas camadas anteriores (Uzi `S_Shot_Uzi` e `S_RifleShot` sintetizado em `AMarau6ShotFX`), que não tocam mais. Volume 3,0 dono / 3,5 outros (cerca de +10 dB sobre o nível da antiga dupla, a pedido: o tiro deve dominar); passos subiram para 0,8 / 1,4 para não sumirem.
 
 AMarau6ShotEffect::Present toca uma única alternativa de áudio: PlaySound2D para o dono (volume 0,85, não marcado como som de interface), ou PlaySoundAtLocation na boca do rifle em terceira pessoa para outros clientes (volume 1). Pitch aleatório 0,95–1,05 a cada tiro, como no TogetherWEB. Atenuação linear esférica: volume estável nos primeiros3m e queda até silêncio em80m. Esses valores são provisórios. Não há oclusão por paredes nesta etapa.
 
