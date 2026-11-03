@@ -513,6 +513,24 @@ void AMarau6Character::CancelReload()
     SetReloadPose(false);
 }
 
+#if WITH_EDITOR
+void AMarau6Character::DebugReload()
+{
+    if (!HasAuthority()) return;
+    if (GetController() && HasEquippedRifle())
+    {
+        AmmoState.Magazine = FMath::Min(AmmoState.Magazine, PrototypeMagazineCapacity / 2);
+        AmmoState.Reserve = FMath::Max(AmmoState.Reserve, PrototypeMagazineCapacity);
+        ServerReload_Implementation();
+        return;
+    }
+    SetReloadPose(true);
+    FTimerHandle Handle;
+    GetWorldTimerManager().SetTimer(Handle, FTimerDelegate::CreateWeakLambda(this, [this]() { SetReloadPose(false); }),
+        PrototypeReloadDuration, false);
+}
+#endif
+
 void AMarau6Character::SetReloadPose(bool bValue)
 {
     if (!HasAuthority() || bReloadPose == bValue) return;
@@ -522,8 +540,10 @@ void AMarau6Character::SetReloadPose(bool bValue)
 
 void AMarau6Character::OnRep_ReloadPose()
 {
-    if (GetNetMode() == NM_DedicatedServer || !ReloadAnimation) return;
-    // The first person body copies this pose, so one montage serves both views.
+    if (GetNetMode() == NM_DedicatedServer) return;
+    ReloadPoseStart = bReloadPose && GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0;
+    if (!ReloadAnimation) return;
+    // Others see the montage on the body; the owner's view model stages its own reload.
     UAnimInstance* Pose = GetMesh()->GetAnimInstance();
     if (!Pose) return;
     if (bReloadPose)
@@ -648,12 +668,33 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
     }
     LastViewRotation = PC->GetControlRotation();
 
-    // Walk bob: one side-to-side cycle per stride pair, a dip on every step, and a slow breath.
+    // Run bob: one side-to-side cycle per stride pair and a dip on every step, in time
+    // with the footsteps (1.6 m stride) at the 5 m/s move speed, plus a slow breath.
+    // The rifle also rolls and nods with the steps so moving reads as running.
     const float Speed = GetCharacterMovement()->IsMovingOnGround() ? GetVelocity().Size2D() : 0.f;
-    BobPhase = FMath::Fmod(BobPhase + DeltaSeconds * Speed * .0105f, 2.f * UE_PI);
-    const float BobAmount = FMath::Clamp(Speed / 600.f, 0.f, 1.6f) * (.45f + .9f * SprintAlpha) * Steady;
-    const FVector Bob(0.f, FMath::Cos(BobPhase) * BobAmount,
-        -FMath::Abs(FMath::Sin(BobPhase)) * BobAmount * .8f + FMath::Sin(GetWorld()->GetTimeSeconds() * 1.6f) * .12f * Steady);
+    const float Cadence = FMath::Lerp(.0196f, .0125f, SprintAlpha);
+    BobPhase = FMath::Fmod(BobPhase + DeltaSeconds * Speed * Cadence, 2.f * UE_PI);
+    const float BobAmount = FMath::Clamp(Speed / 500.f, 0.f, 1.4f) * (1.f - .1f * SprintAlpha) * Steady;
+    const float Sway = FMath::Cos(BobPhase), Step = FMath::Abs(FMath::Sin(BobPhase));
+    const FVector Bob(0.f, Sway * BobAmount * 1.3f,
+        -Step * BobAmount * 1.5f + FMath::Sin(GetWorld()->GetTimeSeconds() * 1.6f) * .12f * Steady);
+    const FRotator BobTurn = FRotator(-Step * BobAmount * 1.1f, Sway * BobAmount * .6f, Sway * BobAmount * 1.8f)
+        * (1.f - .5f * SprintAlpha);
+
+    // Reload: the rig keeps both hands on the rifle, so the owner's reload is staged on
+    // the view model: cant the rifle toward the centre with the magazine side up, drop the
+    // magazine, seat the new one, charge, and bring it back.
+    FVector ReloadShift = FVector::ZeroVector;
+    FRotator ReloadTurn = FRotator::ZeroRotator;
+    if (ReloadPoseStart >= 0.0)
+    {
+        const float T = static_cast<float>((GetWorld()->GetTimeSeconds() - ReloadPoseStart) / PrototypeReloadDuration);
+        const float Body = FMath::SmoothStep(0.f, .15f, T) * (1.f - FMath::SmoothStep(.8f, 1.f, T));
+        auto Pulse = [T](float At, float Width) { return FMath::Max(0.f, 1.f - FMath::Abs(T - At) / Width); };
+        const float MagOut = Pulse(.27f, .07f), MagIn = Pulse(.56f, .05f), Charge = Pulse(.73f, .05f);
+        ReloadTurn = FRotator(8.f * Body - 6.f * MagOut + 4.f * MagIn, -22.f * Body, 28.f * Body);
+        ReloadShift = FVector(-2.f * Body - 3.f * Charge, -5.f * Body, 1.f * Body - 2.f * MagOut + 1.5f * MagIn);
+    }
 
     ShotKick = FMath::FInterpTo(ShotKick, 0.f, DeltaSeconds, 18.f);
     const float Kick = ShotKick * (1.f - .5f * AimAlpha);
@@ -662,9 +703,10 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
     // aim camera instead: the first person rig points the rifle along it and keeps
     // both hands on the weapon, so turning it angles the rifle naturally.
     const FVector Offset = FirstPersonArmsOffset + FirstPersonAimOffset * AimAlpha + SprintArmsOffset * SprintAlpha
-        + Bob + FVector(-2.2f * Kick, SwayRotation.Yaw * .15f, SwayRotation.Pitch * .15f);
+        + Bob + ReloadShift + FVector(-2.2f * Kick, SwayRotation.Yaw * .15f, SwayRotation.Pitch * .15f);
     FirstPersonMesh->SetRelativeTransform(ArmsNeutral * FTransform(Offset));
-    ViewModelAim->SetRelativeRotation(SprintAimRotation * SprintAlpha + SwayRotation + FRotator(1.5f * Kick, 0.f, 0.f));
+    ViewModelAim->SetRelativeRotation(SprintAimRotation * SprintAlpha + SwayRotation + BobTurn + ReloadTurn
+        + FRotator(1.5f * Kick, 0.f, 0.f));
 
     FirstPersonCameraComponent->SetFieldOfView(FMath::Lerp(DefaultFieldOfView, DefaultFieldOfView * AimFieldOfViewScale, AimAlpha));
 

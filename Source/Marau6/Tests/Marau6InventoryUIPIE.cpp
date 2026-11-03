@@ -50,7 +50,7 @@ class FInventoryPIEFlow : public IAutomationLatentCommand
 {
     TSharedPtr<FInventoryPIEData> D;
     int32 Phase=0;double Started=FPlatformTime::Seconds(),At=Started,NextRequest=0;
-    FGuid Rifle,AmmoBox;int32 AmmoPhase=0;double AmmoAt=0;FString Round;FMarau6InventoryUIRequest OldBase;
+    FGuid Rifle,OwnRifle2,AmmoBox;int32 AmmoPhase=0;double AmmoAt=0;FString Round;FMarau6InventoryUIRequest OldBase;
     bool Render=false;
     void Next(){UE_LOG(LogTemp,Display,TEXT("MARAU6_UI_PIE phase %d passed"),Phase);++Phase;At=FPlatformTime::Seconds();NextRequest=0;}
     bool Move(AMarau6PlayerController* PC,int32 Source,int32 Destination)
@@ -101,7 +101,7 @@ public:
         if(Phase==1)
         {
             if(Local[0]->GetBaseProfile()!=1 || Local[1]->GetBaseProfile()!=2 || !Local[0]->InventoryUIItemAt(10) || !Local[1]->InventoryUIItemAt(10) || !Local[0]->HasInventoryWidget() || Local[0]->InventoryRequestPending() || Now-At<1)return false;
-            Rifle=Local[0]->InventoryUIItemAt(10)->Id;Round=Bridge->GetRoundId();Screenshot(Local[0],TEXT("inventory-ui-base.png"));
+            Rifle=Local[0]->InventoryUIItemAt(10)->Id;OwnRifle2=Local[1]->InventoryUIItemAt(10)->Id;Round=Bridge->GetRoundId();Screenshot(Local[0],TEXT("inventory-ui-base.png"));
             if(!Move(Local[0],10,104)){D->Test->AddError(TEXT("Base drag failed: ")+Local[0]->GetInventoryNotice()+TEXT(" context=")+Local[0]->GetInventoryContext().ToString());return true;}Next();return false;
         }
         if(!Remote[0] || !Remote[1])return false;
@@ -129,13 +129,17 @@ public:
             if(Now-At<.7)return false;Screenshot(Local[0],TEXT("inventory-ui-small.png"));
             if(Render){auto Window=FSlateApplication::Get().FindWidgetWindow(Local[0]->GetInventoryWidget()->TakeWidget());if(Window)Window->Resize(FVector2D(1050,850));}
             if(!Local[0]->CaptureInventoryDrag(10,OldBase)){D->Test->AddError(TEXT("Capture old context"));return true;}OldBase.Destination=1;
-            Local[0]->ServerEnterRaid();Local[1]->ServerEnterRaid();Next();return false;
+            // Profile 2 takes the basic kit: a fresh rifle, its own gear stays at the base.
+            Local[1]->ServerSelectKit(true);Local[0]->ServerEnterRaid();Local[1]->ServerEnterRaid();Next();return false;
         }
         if(Phase==6)
         {
             if(!Local[0]->IsInRaid() || !Local[1]->IsInRaid())
             {if(Now>=NextRequest){for(auto* PC:Local)if(!PC->IsInRaid())PC->ServerEnterRaid();NextRequest=Now+.5;}return false;}
-            if(!CA->CanParticipate() || !CA->GetInventory()->ItemAt(10))return false;
+            if(!CA->CanParticipate() || !CA->GetInventory()->ItemAt(10) || !B->GetInventory()->ItemAt(10))return false;
+            const FMarau6Item* Kit=B->GetInventory()->ItemAt(10);
+            D->Test->TestTrue(TEXT("Basic kit enters with a new 20/40 rifle"),Kit->Id!=OwnRifle2 && Kit->Magazine==20 && Kit->Reserve==40 && Kit->Durability==10000);
+            D->Test->TestTrue(TEXT("Basic kit leaves the backpack empty"),!B->GetInventory()->ItemAt(0));
             D->Test->TestFalse(TEXT("Entry restores mouse capture"),Local[0]->bShowMouseCursor);D->Test->TestFalse(TEXT("Entry does not open stale result UI"),CA->IsInventoryOpen());
             Local[0]->ServerInventoryMoveUI(OldBase);CA->ToggleInventoryFromUI();Local[0]->UpdateInventoryUI();Next();return false;
         }
@@ -210,7 +214,8 @@ public:
         }
         if(Phase==11)
         {
-            if(Remote[0]->IsInRaid() || Remote[1]->IsInRaid() || !Bridge->IsSettled() || !Local[0]->InventoryUIItemAt(10))return false;
+            if(Remote[0]->IsInRaid() || Remote[1]->IsInRaid() || !Bridge->IsSettled() || !Local[0]->InventoryUIItemAt(10) || !Local[1]->InventoryUIItemAt(10))return false;
+            D->Test->TestEqual(TEXT("Basic kit death keeps the base rifle"),Local[1]->InventoryUIItemAt(10)->Id,OwnRifle2);
             D->Test->TestEqual(TEXT("Extracted rifle reserve retains box rounds"),Local[0]->InventoryUIItemAt(10)->Reserve,60);D->Test->TestEqual(TEXT("Extracted rifle in base retains identity"),Local[0]->InventoryUIItemAt(10)->Id,Rifle);Local[0]->ServerNextRound();Next();return false;
         }
         if(Phase==12)

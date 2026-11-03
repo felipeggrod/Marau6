@@ -196,25 +196,6 @@ bool FMarau6InventoryRecoveryTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Recovered rifle keeps its identity"),F.Find(Rifle)!=nullptr);
     return true;
 }
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6StarterRifleTest,"Marau6.Inventory.StarterRifle",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
-bool FMarau6StarterRifleTest::RunTest(const FString& Parameters)
-{
-    FInventoryWorld F;auto* A=F.Pawn(FVector(0,0,96));auto* I=A->GetInventory();const FGuid Held=I->ItemAt(10)->Id;
-    const int32 Before=F.Ledger->GetItemCount();
-    TestTrue(TEXT("Armed player keeps their rifle"),F.Ledger->GrantStarterRifle(I));
-    TestEqual(TEXT("No extra rifle for an armed player"),F.Ledger->GetItemCount(),Before);
-    TestTrue(TEXT("Same rifle still equipped"),I->ItemAt(10) && I->ItemAt(10)->Id==Held);
-    TestTrue(TEXT("Drop the rifle"),F.Ledger->Drop(I,Held));
-    TestTrue(TEXT("Unarmed player gets a starter rifle"),F.Ledger->GrantStarterRifle(I));
-    const FMarau6Item* Starter=I->ItemAt(10);
-    if(!TestNotNull(TEXT("Starter rifle in weapon slot"),Starter))return false;
-    TestTrue(TEXT("Starter is a new identity"),Starter->IsRifle() && Starter->Id!=Held);
-    TestTrue(TEXT("Starter rifle is new: 20/40 and intact"),Starter->Magazine==20 && Starter->Reserve==40 && Starter->Durability==10000);
-    TestEqual(TEXT("Equipped ammo follows the starter"),A->GetMagazineAmmo(),20);
-    TestEqual(TEXT("Starter is not left in recovery"),F.Ledger->GetRecoveryCount(),0);
-    TestTrue(TEXT("Dropped rifle stays on the floor"),F.Find(Held)!=nullptr);
-    return true;
-}
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6ReentrantInventoryTest,"Marau6.Inventory.ReentrantDrop",EAutomationTestFlags::EditorContext|EAutomationTestFlags::EngineFilter)
 bool FMarau6ReentrantInventoryTest::RunTest(const FString& Parameters)
 {

@@ -78,19 +78,30 @@ void AMarau6PrototypeHUD::DrawHUD()
     DrawText(Status, FLinearColor::White, 22.f, 78.f, GEngine->GetSmallFont(), 1.f);
     if (bAlive && Character->HasEquippedRifle())
     {
-        // Magazine / reserve, bottom right; an empty magazine turns red.
-        const FString Ammo = FString::Printf(TEXT("%d / %d"), Character->GetMagazineAmmo(), Character->GetReserveAmmo());
+        // Magazine / capacity, bottom right, red when empty; below it, everything carried:
+        // the rifle's reserve plus unopened ammo boxes in the backpack.
+        const FString Ammo = FString::Printf(TEXT("%d / %d"), Character->GetMagazineAmmo(), Character->GetMagazineCapacity());
+        int32 Boxes = 0;
+        for (int32 Slot = 0; Slot < Marau6Slots::BackpackCount; ++Slot)
+            if (const FMarau6Item* Item = Character->GetInventory()->ItemAt(Slot)) Boxes += Item->IsAmmo() ? 1 : 0;
+        const int32 Carried = Character->GetReserveAmmo() + Boxes * 20;
         UFont* Font = GEngine->GetLargeFont();
         const float AmmoScale = 1.6f;
         float Width = 0.f, Height = 0.f;
         GetTextSize(Ammo, Width, Height, Font, AmmoScale);
         const float Right = Canvas->ClipX - 36.f, Bottom = Canvas->ClipY - 32.f;
-        DrawRect(FLinearColor(0.f, 0.f, 0.f, .45f), Right - Width - 18.f, Bottom - Height - 10.f, Width + 32.f, Height + 18.f);
+        const float Top = Bottom - Height - 28.f;
+        DrawRect(FLinearColor(0.f, 0.f, 0.f, .45f), Right - Width - 18.f, Top - 10.f, Width + 32.f, Height + 46.f);
         DrawText(Ammo, Character->GetMagazineAmmo() == 0 ? FLinearColor(1.f, .25f, .2f) : FLinearColor::White,
-            Right - Width, Bottom - Height, Font, AmmoScale);
+            Right - Width, Top, Font, AmmoScale);
+        const FString Pack = FString::Printf(TEXT("%d"), Carried);
+        float PackWidth = 0.f, PackHeight = 0.f;
+        GetTextSize(Pack, PackWidth, PackHeight, GEngine->GetMediumFont(), 1.f);
+        DrawText(Pack, Carried == 0 ? FLinearColor(1.f, .25f, .2f) : FLinearColor(.75f, .78f, .8f),
+            Right - PackWidth, Top + Height + 2.f, GEngine->GetMediumFont(), 1.f);
         if (Character->IsReloading())
         {
-            DrawText(TEXT("RECARREGANDO"), FLinearColor::Yellow, Right - Width, Bottom - Height - 30.f, GEngine->GetSmallFont(), 1.f);
+            DrawText(TEXT("RECARREGANDO"), FLinearColor::Yellow, Right - Width, Top - 32.f, GEngine->GetSmallFont(), 1.f);
         }
     }
     FString ExtractionText = TEXT("EXTRACAO: procure a area verde e permaneca nela");

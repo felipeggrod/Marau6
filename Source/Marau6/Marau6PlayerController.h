@@ -33,6 +33,9 @@ public:
 	AMarau6PlayerController();
 
     bool IsUsingBase() const { return bUseBase; }
+    /** Base choice for the next raid: BASIC KIT (a fresh rifle, own gear stays home) or CUSTOM KIT. */
+    bool IsBasicKit() const { return bBasicKit; }
+    void SelectKit(bool bBasic);
     bool IsInRaid() const { return bInRaid; }
     const FString& GetBaseJson() const { return BaseJson; }
     const FString& GetBaseMessage() const { return BaseMessage; }
@@ -75,12 +78,14 @@ public:
     UFUNCTION(Server,Reliable) void ServerSelectProfile(int32 Number);
     UFUNCTION(Server,Reliable) void ServerBaseMove(int32 Source,int32 Destination);
     UFUNCTION(Server,Reliable) void ServerEnterRaid();
+    UFUNCTION(Server,Reliable) void ServerSelectKit(bool bBasic);
     UFUNCTION(Server,Reliable) void ServerNextRound();
 private:
     friend class UMarau6Persistence;
     UPROPERTY(Replicated) bool bUseBase=false;
     UPROPERTY(Replicated) bool bInRaid=false;
     UPROPERTY(Replicated) bool bBaseBusy=false;
+    UPROPERTY(Replicated) bool bBasicKit=false;
     UPROPERTY(Replicated) FGuid InventoryContext;
     UPROPERTY(Transient) TObjectPtr<UMarau6InventoryWidget> InventoryWidget;
     /** Local listener only: the map's soft room tail, see Marau6Audio. */
@@ -107,6 +112,7 @@ private:
     UPROPERTY(Replicated) FString BaseMessage;
     UPROPERTY(Replicated) FString BaseBackendStatus;
     int32 BaseSelection=0,BaseSource=INDEX_NONE;
+    void ToggleKit();
     void SelectOne();void SelectTwo();void BaseUp();void BaseDown();void BaseLeft();void BaseRight();void BaseAccept();void BaseEnter();void BaseNext();
 protected:
 

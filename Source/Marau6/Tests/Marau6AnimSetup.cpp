@@ -1,5 +1,7 @@
 #if WITH_EDITOR
 #include "Marau6Character.h"
+#include "Marau6ItemLedger.h"
+#include "Marau6LootActor.h"
 #include "Animation/AnimBlueprint.h"
 #include "Animation/BlendSpace.h"
 #include "AssetToolsModule.h"
@@ -16,6 +18,11 @@
 #include "UObject/SavePackage.h"
 #include "UObject/UnrealType.h"
 #include "Templates/Function.h"
+#include "Containers/Ticker.h"
+#include "EngineUtils.h"
+#include "Engine/World.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 
 // Editor-only migration for project-owned copies. Template assets stay unchanged.
 namespace Marau6AnimSetup
@@ -195,6 +202,118 @@ static void Setup()
     if (!Space || !AdaptBody(Space))
         UE_LOG(LogTemp, Error, TEXT("MARAU6_ANIM setup failed; template assets remain unchanged."));
 }
+// Inspection aids for Marau6.CaptureViewModel shot lists (docs/recarga-locomocao.md).
+static void PreviewReload(const TArray<FString>& Args, UWorld* World)
+{
+    if (!World || !World->IsGameWorld()) return;
+    const bool bOthers = Args.Num() > 0 && Args[0] == TEXT("others");
+    for (TActorIterator<AMarau6Character> It(World); It; ++It)
+        if (!bOthers || !It->IsPlayerControlled()) It->DebugReload();
+}
+
+/** Runs non-player pawns in a 1.5 m circle beside where they stand; "1" also runs the viewer forward. */
+static void PreviewRun(const TArray<FString>& Args, UWorld* World)
+{
+    APlayerController* PC = World && World->IsGameWorld() ? World->GetFirstPlayerController() : nullptr;
+    APawn* Viewer = PC ? PC->GetPawn() : nullptr;
+    if (!Viewer) return;
+    const bool bViewer = Args.Num() > 0 && Args[0] == TEXT("1");
+    TArray<TPair<TWeakObjectPtr<ACharacter>, FVector>> Runners;
+    for (TActorIterator<AMarau6Character> It(World); It; ++It)
+    {
+        if (*It == Viewer ? !bViewer : It->IsPlayerControlled()) continue;
+        It->GetCharacterMovement()->bRunPhysicsWithNoController = true;
+        It->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+        Runners.Add({ *It, It->GetActorLocation() + It->GetActorRightVector() * 150.f });
+    }
+    if (bViewer) PC->SetIgnoreMoveInput(false);
+    FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([Runners, Viewer = TWeakObjectPtr<APawn>(Viewer), Start = FPlatformTime::Seconds()](float)
+    {
+        if (FPlatformTime::Seconds() - Start > 8.0) return false;
+        for (const auto& [Runner, Center] : Runners)
+        {
+            ACharacter* C = Runner.Get();
+            if (!C) continue;
+            // The viewer keeps a centre at its side and so runs straight; the others circle theirs.
+            const FVector Around = C == Viewer.Get() ? C->GetActorLocation() + C->GetActorRightVector() * 150.f : Center;
+            const FVector Radial = (C->GetActorLocation() - Around).GetSafeNormal2D();
+            const FVector Tangent = FVector::CrossProduct(FVector::UpVector, Radial);
+            const float Distance = FVector::Dist2D(C->GetActorLocation(), Around);
+            C->AddMovementInput((Tangent + Radial * (150.f - Distance) / 150.f).GetSafeNormal2D());
+        }
+        return true;
+    }));
+}
+/** A level, side-on soldier 4 m ahead of the viewer, for reading third person poses. */
+static void PreviewSoldier(UWorld* World)
+{
+    APlayerController* PC = World && World->IsGameWorld() ? World->GetFirstPlayerController() : nullptr;
+    APawn* Viewer = PC ? PC->GetPawn() : nullptr;
+    if (!Viewer) return;
+    // Face the most open of eight directions so cover does not hide the soldier.
+    double BestYaw = PC->GetControlRotation().Yaw, BestRoom = 0.0;
+    for (int32 Step = 0; Step < 8; ++Step)
+    {
+        const double Yaw = Step * 45.0;
+        const FVector From = Viewer->GetActorLocation(), To = From + FRotator(0.0, Yaw, 0.0).Vector() * 1500.0;
+        FHitResult Hit;
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(Marau6PreviewSoldier), false, Viewer);
+        const double Room = World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Query) ? Hit.Distance : 1500.0;
+        if (Room > BestRoom) { BestRoom = Room; BestYaw = Yaw; }
+    }
+    PC->SetControlRotation(FRotator(0.0, BestYaw, 0.0));
+    const FRotator Facing(0.0, BestYaw, 0.0);
+    FActorSpawnParameters Spawn;
+    Spawn.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+    World->SpawnActor<AMarau6Character>(Viewer->GetClass(), Viewer->GetActorLocation() + Facing.Vector() * FMath::Min(400.0, BestRoom - 120.0),
+        FRotator(0.0, Facing.Yaw + 90.0, 0.0), Spawn);
+    PC->SetIgnoreMoveInput(true);
+    // The owner's arms would cover the soldier; this view is only for reading the body.
+    if (auto* Own = Cast<AMarau6Character>(Viewer)) Own->GetFirstPersonMesh()->SetVisibility(false, true);
+}
+
+/** Turns the viewer to an absolute yaw, to frame previews away from cover. */
+static void PreviewYaw(const TArray<FString>& Args, UWorld* World)
+{
+    APlayerController* PC = World && World->IsGameWorld() ? World->GetFirstPlayerController() : nullptr;
+    if (PC && Args.Num() > 0) PC->SetControlRotation(FRotator(PC->GetControlRotation().Pitch, FCString::Atof(*Args[0]), 0.0));
+}
+/** One loot item of each kind in a row 2.5 m ahead of the viewer, on the floor. */
+static void PreviewLoot(UWorld* World)
+{
+    APlayerController* PC = World && World->IsGameWorld() ? World->GetFirstPlayerController() : nullptr;
+    APawn* Viewer = PC ? PC->GetPawn() : nullptr;
+    auto* Ledger = World ? World->GetSubsystem<UMarau6ItemLedger>() : nullptr;
+    if (!Viewer || !Ledger) return;
+    const FRotator Facing(0.0, PC->GetControlRotation().Yaw, 0.0);
+    PC->SetControlRotation(FRotator(-25.0, Facing.Yaw, 0.0));
+    const EMarau6ItemKind Kinds[] = { EMarau6ItemKind::Rifle, EMarau6ItemKind::Supply, EMarau6ItemKind::Ammo, EMarau6ItemKind::Scrap };
+    for (int32 Index = 0; Index < 4; ++Index)
+    {
+        const FVector At = Viewer->GetActorLocation() + Facing.Vector() * 250.0
+            + FRotationMatrix(Facing).GetUnitAxis(EAxis::Y) * (Index - 1.5) * 70.0 - FVector(0, 0, 70.0);
+        // Register the kind before BeginPlay, which would otherwise seed the default kind.
+        auto* Loot = World->SpawnActorDeferred<AMarau6LootActor>(AMarau6LootActor::StaticClass(), FTransform(At));
+        if (!Loot) continue;
+        Ledger->RegisterSeed(Loot, Kinds[Index]);
+        Loot->FinishSpawning(FTransform(At));
+    }
+}
+static FAutoConsoleCommandWithWorld PreviewLootCommand(TEXT("Marau6.PreviewLoot"),
+    TEXT("Lay out one loot item of each kind ahead of the viewer."),
+    FConsoleCommandWithWorldDelegate::CreateStatic(&PreviewLoot));
+static FAutoConsoleCommandWithWorld PreviewSoldierCommand(TEXT("Marau6.PreviewSoldier"),
+    TEXT("Spawn a level, side-on soldier 4 m ahead of the viewer."),
+    FConsoleCommandWithWorldDelegate::CreateStatic(&PreviewSoldier));
+static FAutoConsoleCommandWithWorldAndArgs PreviewYawCommand(TEXT("Marau6.PreviewYaw"),
+    TEXT("Set the viewer's yaw in degrees."),
+    FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&PreviewYaw));
+static FAutoConsoleCommandWithWorldAndArgs PreviewReloadCommand(TEXT("Marau6.PreviewReload"),
+    TEXT("Reload every character (\"others\": all but players); preview pawns only show the pose."),
+    FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&PreviewReload));
+static FAutoConsoleCommandWithWorldAndArgs PreviewRunCommand(TEXT("Marau6.PreviewRun"),
+    TEXT("Run preview pawns in a circle ahead of the viewer for 8 s; 1 also runs the viewer."),
+    FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&PreviewRun));
 static FAutoConsoleCommand SetupCommand(TEXT("Marau6.SetupLocomotion"),
     TEXT("Running locomotion copy and the upper body reload slot for the third person pose."),
     FConsoleCommandDelegate::CreateStatic(&Setup));

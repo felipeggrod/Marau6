@@ -223,6 +223,7 @@ bool AMarau6PlayerController::HandleInventoryKey(FKey Key)
     if(Key==EKeys::Two && IsInventoryAtBase()){CancelInventoryDrag();SelectTwo();return true;}
     if(Key==EKeys::B && IsInventoryAtBase()){CancelInventoryDrag();BaseEnter();return true;}
     if(Key==EKeys::N && IsInventoryAtBase()){CancelInventoryDrag();BaseNext();return true;}
+    if(Key==EKeys::K && IsInventoryAtBase()){CancelInventoryDrag();ToggleKit();return true;}
     if(Key==EKeys::Up){if(IsInventoryAtBase())BaseUp();else if(C)C->SelectInventorySlot((C->GetSelectedInventorySlot()+10)%11);return true;}
     if(Key==EKeys::Down){if(IsInventoryAtBase())BaseDown();else if(C)C->SelectInventorySlot((C->GetSelectedInventorySlot()+1)%11);return true;}
     if(Key==EKeys::Left && IsInventoryAtBase()){BaseLeft();return true;}

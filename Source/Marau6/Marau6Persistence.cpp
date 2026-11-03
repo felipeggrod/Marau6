@@ -213,6 +213,16 @@ void UMarau6Persistence::SelectProfile(AMarau6PlayerController* PC,int32 Number)
     if(PC->BaseProfile) Claims.Remove(PC->BaseProfile);
     PC->BaseProfile=Number;Claims.Add(Number,PC);PC->BaseJson.Empty();PC->BaseMessage=TEXT("Carregando perfil...");Refresh(PC);
 }
+void UMarau6Persistence::SelectKit(AMarau6PlayerController* PC,bool bBasic)
+{
+    if(!IsValid(PC) || PC->bInRaid)return;
+    if(!bReady || bFatal){PC->BaseMessage=TEXT("Backend nao esta pronto. Aguarde; se nao conectar, use Iniciar-Marau6.cmd.");PC->ForceNetUpdate();return;}
+    if(PC->bBaseBusy || bEntering || (PC->BaseProfile!=0 && Entered.Contains(PC->BaseProfile)))
+    {PC->BaseMessage=TEXT("Aguarde a operacao pendente antes de trocar o kit.");PC->ForceNetUpdate();return;}
+    PC->bBasicKit=bBasic;
+    PC->BaseMessage=bBasic?TEXT("KIT BASICO: rifle novo 20/40; seu equipamento fica na base."):TEXT("KIT PERSONALIZADO: entra com o equipamento preparado.");
+    PC->ForceNetUpdate();
+}
 void UMarau6Persistence::MoveBase(AMarau6PlayerController* PC,int32 Source,int32 Destination,TFunction<void(bool,const FString&)> Done)
 {
     auto Reject=[&](const FString& Why){if(IsValid(PC)){PC->BaseMessage=Why;PC->ForceNetUpdate();}if(Done)Done(false,Why);};
@@ -253,7 +263,6 @@ void UMarau6Persistence::EnterRaid(AMarau6PlayerController* PC)
             PC->bInRaid=EntryPawn->SetAtBase(false);
             PC->BaseMessage=PC->bInRaid?TEXT("Entrada confirmada"):TEXT("Ponto ocupado; B tenta novamente sem reservar outro equipamento.");
             if(PC->bInRaid && !CommitLedger()){EntryPawn->SetAtBase(true);PC->bInRaid=false;}
-            else if(PC->bInRaid)Ledger->GrantStarterRifle(EntryPawn->GetInventory());
             PC->ForceNetUpdate();return;
         }
         PC->BaseMessage=TEXT("Entrada utilizada. Aguarde o outro perfil e use N para nova rodada.");return;
@@ -263,6 +272,8 @@ void UMarau6Persistence::EnterRaid(AMarau6PlayerController* PC)
     {PC->BaseMessage=TEXT("Nao ha ponto de inicio livre no mapa; equipamento nao foi reservado.");PC->ForceNetUpdate();return;}
     auto State=Parse(PC->BaseJson);if(!State)return;
     auto O=Operation();O->SetStringField(TEXT("raidId"),RaidId);O->SetNumberField(TEXT("profile"),PC->BaseProfile);O->SetNumberField(TEXT("revision"),State->GetIntegerField(TEXT("revision")));
+    // Only a basic entry names its kit, so custom entries keep their original body and receipt.
+    if(PC->bBasicKit)O->SetStringField(TEXT("kit"),TEXT("basic"));
     bEntering=true;PC->BaseMessage=TEXT("Reservando equipamento...");TWeakObjectPtr<AMarau6PlayerController> Weak=PC;const int32 Number=PC->BaseProfile;
     Queue(TEXT("/raids/enter"),O,[this,Weak,Number](const FString& Text)
     {
@@ -285,7 +296,6 @@ void UMarau6Persistence::EnterRaid(AMarau6PlayerController* PC)
         if(!C->bInRaid)C->BaseMessage=TEXT("Equipamento reservado; ponto ocupado. B tenta a entrada novamente.");
         C->ForceNetUpdate();
         if(!CommitLedger()){Pawn->SetAtBase(true);C->bInRaid=false;}
-        else if(C->bInRaid)GetWorld()->GetSubsystem<UMarau6ItemLedger>()->GrantStarterRifle(Pawn->GetInventory());
         FlushDeferredDeaths();
     });
 }

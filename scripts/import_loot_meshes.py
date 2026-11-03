@@ -2,7 +2,7 @@
 
 Run with the editor closed:
 UnrealEditor-Cmd Marau6.uproject -run=pythonscript -script=<absolute path to this file> -unattended -nullrhi
-Sources default to F:/Downloads; override with the MARAU6_LOOT_SOURCE environment variable.
+Sources default to SourceArt/Loot in the project; override with the MARAU6_LOOT_SOURCE environment variable.
 """
 
 import os
@@ -10,7 +10,7 @@ from pathlib import Path
 import unreal
 
 
-SOURCE_DIR = Path(os.environ.get('MARAU6_LOOT_SOURCE', 'F:/Downloads'))
+SOURCE_DIR = Path(os.environ.get('MARAU6_LOOT_SOURCE', str(Path(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())) / 'SourceArt' / 'Loot')))
 ASSET_DIR = '/Game/Marau6/Items'
 
 SOURCES = {
@@ -37,7 +37,7 @@ for name, source in SOURCES.items():
     meshes = pipeline.get_editor_property('mesh_pipeline')
     meshes.set_editor_property('import_static_meshes', True)
     meshes.set_editor_property('import_skeletal_meshes', False)
-    meshes.set_editor_property('combine_static_meshes', True)
+    meshes.set_editor_property('combine_static_meshes_behavior', unreal.InterchangeCombineStaticMeshesBehavior.ALL)
     meshes.set_editor_property('collision', False)
     pipeline.get_editor_property('animation_pipeline').set_editor_property('import_animations', False)
 

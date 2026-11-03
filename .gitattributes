@@ -13,3 +13,4 @@
 *.uptnl filter=lfs diff=lfs merge=lfs -text
 
 *.png filter=lfs diff=lfs merge=lfs -text
+*.glb filter=lfs diff=lfs merge=lfs -text

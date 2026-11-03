@@ -145,6 +145,26 @@ TSharedRef<SWidget> UMarau6InventoryWidget::RebuildWidget()
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SBox).Visibility_Lambda(BaseOnly)[Hint(TEXT("ESC"),TEXT("CANCELAR"))]]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SBox).Visibility_Lambda(RaidOnly)[Hint(TEXT("TAB"),TEXT("FECHAR"))]];
 
+    // Kit for the next raid, above the character's gear. BASIC enters with a fresh rifle
+    // and leaves everything below at the base; CUSTOM enters with what is equipped here.
+    auto KitTab=[PC,Label](const TCHAR* Name,const TCHAR* Detail,bool bBasic)
+    {
+        auto Active=[PC,bBasic]{return PC.IsValid() && PC->IsBasicKit()==bBasic;};
+        return SNew(SButton).IsFocusable(false).ButtonStyle(&Marau6UI::FlatButton()).ContentPadding(FMargin(0,0,48,0))
+            .OnClicked_Lambda([PC,bBasic]{if(auto* P=PC.Get())P->SelectKit(bBasic);return FReply::Handled();})
+            [SNew(SVerticalBox)
+                +SVerticalBox::Slot().AutoHeight()[SNew(STextBlock).Text(FText::FromString(Name)).Font(Marau6UI::Font(TEXT("Medium"),14,80))
+                    .ColorAndOpacity_Lambda([Active]{return FSlateColor(Active()?Marau6UI::Text():Marau6UI::Muted());})]
+                +SVerticalBox::Slot().AutoHeight().Padding(0,4,0,8)[Label(Detail,Marau6UI::Mono(7),Marau6UI::Muted())]
+                +SVerticalBox::Slot().AutoHeight()[SNew(SBox).HeightOverride(2)[SNew(SImage).Image(Marau6UI::White())
+                    .ColorAndOpacity_Lambda([Active]{return FSlateColor(Active()?Marau6UI::Brass():FLinearColor::Transparent);})]]];
+    };
+    auto Kits=SNew(SHorizontalBox).Visibility_Lambda(BaseOnly)
+        +SHorizontalBox::Slot().AutoWidth()[KitTab(TEXT("KIT BÁSICO"),TEXT("RIFLE NOVO 20/40 · EQUIPAMENTO FICA NA BASE"),true)]
+        +SHorizontalBox::Slot().AutoWidth()[KitTab(TEXT("KIT PERSONALIZADO"),TEXT("ENTRA COM O EQUIPAMENTO ABAIXO"),false)]
+        +SHorizontalBox::Slot().FillWidth(1)
+        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[KeyButton(TEXT("K"),TEXT("TROCAR KIT"),EKeys::K)];
+
     auto Groups=SNew(SWrapBox).UseAllottedSize(true).InnerSlotPadding(FVector2D(20,20));
     Groups->AddSlot().VAlign(VAlign_Top)[SNew(SBox).WidthOverride_Lambda([this]{return GroupWidth(0);})[Panel(SNew(SVerticalBox)
         +SVerticalBox::Slot().AutoHeight()[Heading(TEXT("ARMA EQUIPADA"),[this]{return Occupancy(Marau6Slots::Weapon,1);})]
@@ -210,6 +230,7 @@ TSharedRef<SWidget> UMarau6InventoryWidget::RebuildWidget()
             +SVerticalBox::Slot().AutoHeight().Padding(20,0)[Header]
             +SVerticalBox::Slot().AutoHeight()[Rule(Marau6UI::Rule())]
             +SVerticalBox::Slot().AutoHeight().Padding(20,14)[Keys]]]
+        +SVerticalBox::Slot().AutoHeight().Padding(20,16,20,0)[Kits]
         +SVerticalBox::Slot().FillHeight(1).Padding(20,14,8,10)[SNew(SScrollBox)+SScrollBox::Slot().Padding(0,0,12,0)[Groups]]
         +SVerticalBox::Slot().AutoHeight()[SNew(SBorder).BorderImage(Marau6UI::Bar()).Padding(0)[SNew(SVerticalBox)
             +SVerticalBox::Slot().AutoHeight()[Rule(Marau6UI::Rule())]

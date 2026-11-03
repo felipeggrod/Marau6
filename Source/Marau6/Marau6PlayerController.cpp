@@ -88,6 +88,7 @@ void AMarau6PlayerController::SetupInputComponent()
     InputComponent->BindKey(EKeys::Enter,IE_Pressed,this,&AMarau6PlayerController::BaseAccept);
     InputComponent->BindKey(EKeys::B,IE_Pressed,this,&AMarau6PlayerController::BaseEnter);
     InputComponent->BindKey(EKeys::N,IE_Pressed,this,&AMarau6PlayerController::BaseNext);
+    InputComponent->BindKey(EKeys::K,IE_Pressed,this,&AMarau6PlayerController::ToggleKit);
 
 
 	// only add IMCs for local player controllers
@@ -124,7 +125,7 @@ void AMarau6PlayerController::GetLifetimeReplicatedProps(TArray<FLifetimePropert
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(AMarau6PlayerController,bUseBase);DOREPLIFETIME(AMarau6PlayerController,bInRaid);
-    DOREPLIFETIME(AMarau6PlayerController,InventoryContext);DOREPLIFETIME(AMarau6PlayerController,bBaseBusy);
+    DOREPLIFETIME(AMarau6PlayerController,InventoryContext);DOREPLIFETIME(AMarau6PlayerController,bBaseBusy);DOREPLIFETIME(AMarau6PlayerController,bBasicKit);
     DOREPLIFETIME(AMarau6PlayerController,BaseProfile);DOREPLIFETIME(AMarau6PlayerController,BaseJson);DOREPLIFETIME(AMarau6PlayerController,BaseMessage);DOREPLIFETIME(AMarau6PlayerController,BaseBackendStatus);
 }
 void AMarau6PlayerController::OnPossess(APawn* NewPawn)
@@ -147,6 +148,9 @@ void AMarau6PlayerController::BaseNext(){if(bUseBase && !bInRaid){InventoryMessa
 void AMarau6PlayerController::ServerSelectProfile_Implementation(int32 N){GetWorld()->GetSubsystem<UMarau6Persistence>()->SelectProfile(this,N);}
 void AMarau6PlayerController::ServerBaseMove_Implementation(int32 S,int32 D)
 {TWeakObjectPtr<AMarau6PlayerController> Weak(this);GetWorld()->GetSubsystem<UMarau6Persistence>()->MoveBase(this,S,D,[Weak](bool,const FString& Why){if(auto* PC=Weak.Get())PC->ClientInventoryNotice(Why);});}
+void AMarau6PlayerController::SelectKit(bool bBasic){if(bUseBase && !bInRaid && bBasic!=bBasicKit){InventoryMessage.Empty();ServerSelectKit(bBasic);}}
+void AMarau6PlayerController::ToggleKit(){SelectKit(!bBasicKit);}
+void AMarau6PlayerController::ServerSelectKit_Implementation(bool bBasic){GetWorld()->GetSubsystem<UMarau6Persistence>()->SelectKit(this,bBasic);}
 void AMarau6PlayerController::ServerEnterRaid_Implementation(){GetWorld()->GetSubsystem<UMarau6Persistence>()->EnterRaid(this);}
 void AMarau6PlayerController::ServerNextRound_Implementation(){GetWorld()->GetSubsystem<UMarau6Persistence>()->NextRound(this);}
 void AMarau6PlayerController::BaseRight()

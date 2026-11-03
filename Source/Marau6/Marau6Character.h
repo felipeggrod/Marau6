@@ -163,6 +163,8 @@ protected:
     float AimAlpha = 0.f;
     float SprintAlpha = 0.f;
     float BobPhase = 0.f;
+    /** Owner's clock for the staged first person reload; negative when not reloading. */
+    double ReloadPoseStart = -1.0;
     float ShotKick = 0.f;
     FRotator SwayRotation = FRotator::ZeroRotator;
     FRotator LastViewRotation = FRotator::ZeroRotator;
@@ -294,6 +296,13 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Combat")
     bool IsReloading() const { return AmmoState.bReloading; }
+
+    int32 GetMagazineCapacity() const { return PrototypeMagazineCapacity; }
+
+#if WITH_EDITOR
+    /** Inspection aid: reload now, or only show the reload pose on a pawn without a controller. */
+    void DebugReload();
+#endif
 
     /** Montage slot added to the body pose's upper branch by Marau6.SetupLocomotion. */
     static inline const FName ReloadSlot = TEXT("DefaultSlot");
