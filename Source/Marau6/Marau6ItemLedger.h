@@ -29,6 +29,8 @@ public:
     bool IsExtracted(FGuid Owner) const { return ExtractedOwners.Contains(Owner); }
     void ResetRound();
     bool GrantWorld(FGuid Id,EMarau6ItemKind Kind,FVector Location);
+    /** Raid entry with an empty weapon slot: a fresh rifle, born as loot (backend rule) then equipped. */
+    bool GrantStarterRifle(UMarau6InventoryComponent* Component);
     FGuid RegisterInventory(UMarau6InventoryComponent* Component);
     void RegisterSeed(AMarau6LootActor* Actor, EMarau6ItemKind Kind);
     bool Pickup(UMarau6InventoryComponent* Component, AMarau6LootActor* Actor, FGuid Expected);

@@ -6,6 +6,9 @@
 #include "Marau6Audio.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/ReverbEffect.h"
+#include "Sound/SoundAttenuation.h"
+#include "Sound/SoundBase.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Marau6Character.h"
 #include "Net/UnrealNetwork.h"
 #include "Marau6PrototypeHUD.h"
@@ -23,6 +26,24 @@ AMarau6PlayerController::AMarau6PlayerController()
 	PlayerCameraManagerClass = AMarau6CameraManager::StaticClass();
     AmbientReverb = CreateDefaultSubobject<UReverbEffect>(TEXT("AmbientReverb"));
     Marau6Audio::ConfigureAmbientReverb(*AmbientReverb);
+    static ConstructorHelpers::FObjectFinder<USoundBase> Gas(TEXT("/Game/Marau6/Audio/S_Decompression.S_Decompression"));
+    GasSound = Gas.Object;
+    GasAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("GasAttenuation"));
+    Marau6Audio::ConfigureOwnerSend(GasAttenuation->Attenuation, .3f);
+}
+
+void AMarau6PlayerController::PlayGas(float Pitch)
+{
+    if(GasSound)UGameplayStatics::PlaySoundAtLocation(this, GasSound, GetFocalLocation(), FRotator::ZeroRotator,
+        Marau6Audio::GasVolume, Pitch, 0.f, GasAttenuation);
+}
+
+// bInRaid is set by the server and replicated; a listen server host has no OnRep, so watch it here.
+void AMarau6PlayerController::UpdateRaidGas()
+{
+    if(!IsLocalPlayerController() || bInRaid==bHeardRaid)return;
+    bHeardRaid=bInRaid;
+    if(bInRaid)PlayGas(Marau6Audio::GasRaidPitch);
 }
 
 void AMarau6PlayerController::BeginPlay()
@@ -37,6 +58,7 @@ void AMarau6PlayerController::BeginPlay()
         ClientSetHUD(AMarau6PrototypeHUD::StaticClass());
         UGameplayStatics::ActivateReverbEffect(this, AmbientReverb, Marau6Audio::AmbientReverbTag,
             0.f, Marau6Audio::AmbientReverbVolume, .5f);
+        PlayGas(Marau6Audio::GasStartPitch);
     }
 
 	

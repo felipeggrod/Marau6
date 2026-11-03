@@ -21,6 +21,7 @@ class UCameraComponent;
 class UInputAction;
 class UAnimInstance;
 class UInputMappingContext;
+class UAnimSequence;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -182,6 +183,12 @@ protected:
     void FinishReload();
     void CancelReload();
 
+    /** Everyone sees the reload: the owner-only ammo state cannot drive the pose. */
+    UPROPERTY(ReplicatedUsing=OnRep_ReloadPose) bool bReloadPose=false;
+    UFUNCTION() void OnRep_ReloadPose();
+    void SetReloadPose(bool bValue);
+    UPROPERTY() TObjectPtr<UAnimSequence> ReloadAnimation;
+
     UFUNCTION(Server, Unreliable)
     void ServerFire();
 
@@ -287,6 +294,9 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Combat")
     bool IsReloading() const { return AmmoState.bReloading; }
+
+    /** Montage slot added to the body pose's upper branch by Marau6.SetupLocomotion. */
+    static inline const FName ReloadSlot = TEXT("DefaultSlot");
 
     virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
         AController* EventInstigator, AActor* DamageCauser) override;

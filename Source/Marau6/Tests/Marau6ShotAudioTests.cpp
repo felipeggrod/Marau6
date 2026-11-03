@@ -4,6 +4,7 @@
 #include "Sound/SoundAttenuation.h"
 #include "Sound/ReverbEffect.h"
 #include "Marau6PlayerController.h"
+#include "Marau6Audio.h"
 #include "UObject/UnrealType.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarau6ShotAudioTest, "Marau6.Combat.ShotAudio",
@@ -29,6 +30,12 @@ bool FMarau6ShotAudioTest::RunTest(const FString& Parameters)
     const float Far = Attenuation->Attenuation.Evaluate(Origin, FVector(6000,0,0));
     TestTrue(TEXT("Distant rifle quieter than nearby rifle"), Near > Far && Far > 0.f);
     TestTrue(TEXT("Beyond range sound inaudible"), Attenuation->Attenuation.Evaluate(Origin, FVector(9000,0,0)) <= KINDA_SMALL_NUMBER);
+    TestTrue(TEXT("Background gunfire at 20 m is well below full volume"), Attenuation->Attenuation.Evaluate(Origin, FVector(2000,0,0)) < .35f);
+    TestTrue(TEXT("Uzi and rifle layers share one volume"), Marau6Audio::ShotOwner == Marau6Audio::ReportOwner
+        && Marau6Audio::ShotWorld == Marau6Audio::ReportWorld);
+    // Two equal layers add in power: keep the pair near the footstep balance.
+    TestTrue(TEXT("Own footsteps not buried under own shots"),
+        Marau6Audio::StepOwner >= FMath::Sqrt(2.f) * Marau6Audio::ShotOwner * .75f);
     TestTrue(TEXT("Distant shots are wetter"), !!Attenuation->Attenuation.bEnableReverbSend
         && Attenuation->Attenuation.ReverbWetLevelMax > Attenuation->Attenuation.ReverbWetLevelMin);
     const auto* OwnerProperty = FindFProperty<FObjectPropertyBase>(Class, TEXT("OwnerShotAttenuation"));

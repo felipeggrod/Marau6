@@ -7,6 +7,7 @@
 #include "Marau6LootActor.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "GameFramework/PlayerController.h"
 
 void AMarau6PrototypeHUD::DrawHUD()
@@ -75,6 +76,23 @@ void AMarau6PrototypeHUD::DrawHUD()
             ? TEXT("SEM MUNICAO")
             : TEXT("Clique: disparar | R: recarregar");
     DrawText(Status, FLinearColor::White, 22.f, 78.f, GEngine->GetSmallFont(), 1.f);
+    if (bAlive && Character->HasEquippedRifle())
+    {
+        // Magazine / reserve, bottom right; an empty magazine turns red.
+        const FString Ammo = FString::Printf(TEXT("%d / %d"), Character->GetMagazineAmmo(), Character->GetReserveAmmo());
+        UFont* Font = GEngine->GetLargeFont();
+        const float AmmoScale = 1.6f;
+        float Width = 0.f, Height = 0.f;
+        GetTextSize(Ammo, Width, Height, Font, AmmoScale);
+        const float Right = Canvas->ClipX - 36.f, Bottom = Canvas->ClipY - 32.f;
+        DrawRect(FLinearColor(0.f, 0.f, 0.f, .45f), Right - Width - 18.f, Bottom - Height - 10.f, Width + 32.f, Height + 18.f);
+        DrawText(Ammo, Character->GetMagazineAmmo() == 0 ? FLinearColor(1.f, .25f, .2f) : FLinearColor::White,
+            Right - Width, Bottom - Height, Font, AmmoScale);
+        if (Character->IsReloading())
+        {
+            DrawText(TEXT("RECARREGANDO"), FLinearColor::Yellow, Right - Width, Bottom - Height - 30.f, GEngine->GetSmallFont(), 1.f);
+        }
+    }
     FString ExtractionText = TEXT("EXTRACAO: procure a area verde e permaneca nela");
     if (Raid == EMarau6RaidState::Extracting)
         ExtractionText = FString::Printf(TEXT("EXTRAINDO: %.1f s | sair da area cancela"), Character->GetExtractionSecondsRemaining());

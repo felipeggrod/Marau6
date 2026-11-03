@@ -20,12 +20,7 @@ AMarau6ShotEffect::AMarau6ShotEffect()
         TEXT("/Game/Marau6/Audio/S_Shot_Uzi.S_Shot_Uzi"));
     ShotSound = Sound.Object;
     ShotAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("ShotAttenuation"));
-    ShotAttenuation->Attenuation.bAttenuate = true;
-    ShotAttenuation->Attenuation.bSpatialize = true;
-    ShotAttenuation->Attenuation.DistanceAlgorithm = EAttenuationDistanceModel::Linear;
-    ShotAttenuation->Attenuation.AttenuationShape = EAttenuationShape::Sphere;
-    ShotAttenuation->Attenuation.AttenuationShapeExtents = FVector(300.f, 0.f, 0.f);
-    ShotAttenuation->Attenuation.FalloffDistance = 7700.f;
+    Marau6Audio::ConfigureGunfireFalloff(ShotAttenuation->Attenuation, Marau6Audio::GunfireInner, Marau6Audio::GunfireFalloff);
     Marau6Audio::ConfigureDistanceSend(ShotAttenuation->Attenuation, .3f, .8f);
     OwnerShotAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("OwnerShotAttenuation"));
     Marau6Audio::ConfigureOwnerSend(OwnerShotAttenuation->Attenuation, .3f);
@@ -60,13 +55,13 @@ void AMarau6ShotEffect::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson
         if (bFirstPerson)
         {
             UGameplayStatics::PlaySoundAtLocation(this, ShotSound, Rifle->GetComponentLocation(),
-                FRotator::ZeroRotator, .85f, Pitch, 0.f, OwnerShotAttenuation);
+                FRotator::ZeroRotator, Marau6Audio::ShotOwner, Pitch, 0.f, OwnerShotAttenuation);
         }
         else
         {
             UGameplayStatics::PlaySoundAtLocation(this, ShotSound,
                 Rifle->GetSocketLocation(TEXT("Muzzle")), FRotator::ZeroRotator,
-                1.f, Pitch, 0.f, ShotAttenuation);
+                Marau6Audio::ShotWorld, Pitch, 0.f, ShotAttenuation);
         }
     }
     if (Rifle && Rifle->DoesSocketExist(TEXT("Muzzle")))

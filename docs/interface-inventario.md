@@ -2,6 +2,9 @@
 
 Interface nativa UMG/Slate com arrastar e soltar, seleção por mouse e detalhes do item. A base mostra arma, mochila (8), safe pocket (2) e stash (32). Na partida, TAB abre/fecha; a stash não está disponível.
 
+## Visual
+A base usa o fundo do corredor metálico (/Game/Marau6/UI/T_Marau6_BaseCorridor, fonte em Content/Marau6/UI/Marau6_BaseCorridor.png; reimporte com scripts/import_ui_background.py, editor fechado). Cabeçalho com MARAU6 e abas; só EQUIPAMENTO existe neste protótipo; as demais aparecem com o selo EM BREVE. Abaixo: teclas 1/2/B/N clicáveis, colunas de equipamento, stash e inspeção, e rodapé com a mensagem atual, a luz de estado (verde conectado, âmbar aguardando, vermelho falha) e a legenda. Slots mostram código curto (MED, MAT, MUN, RIFLE) e categoria; o selecionado fica em latão. Na partida, o fundo é escuro e opaco, sem as abas e a stash.
+
 ## Como usar
 - Clique em um item para consultar seus dados. Rifle mostra munição e condição; suprimentos mostram cura, duração e restrições. Rótulos curtos nos slots evitam cortes; o painel de detalhes mostra o nome completo.
 - Arraste para um slot vazio para mover, ou para um ocupado para trocar. A troca exige compatibilidade dos dois itens. Durante o arraste, a origem fica cinza; destinos válidos mantêm a aparência normal e os incompatíveis recebem um X diagonal sobre a caixa, sem verde ou vermelho. Soltar fora dos slots ou na origem cancela, sem descartar.

@@ -12,6 +12,8 @@ class UMarau6InventoryWidget;
 class UInputMappingContext;
 class UUserWidget;
 class UReverbEffect;
+class USoundBase;
+class USoundAttenuation;
 
 /**
  *  Simple first person Player Controller
@@ -83,6 +85,12 @@ private:
     UPROPERTY(Transient) TObjectPtr<UMarau6InventoryWidget> InventoryWidget;
     /** Local listener only: the map's soft room tail, see Marau6Audio. */
     UPROPERTY() TObjectPtr<UReverbEffect> AmbientReverb;
+    /** Local listener only: decompression gas on game start and raid entry. */
+    UPROPERTY() TObjectPtr<USoundBase> GasSound;
+    UPROPERTY() TObjectPtr<USoundAttenuation> GasAttenuation;
+    bool bHeardRaid=false;
+    void PlayGas(float Pitch);
+    void UpdateRaidGas();
     mutable FString CachedInventoryJson;
     mutable TArray<FMarau6Item> CachedBaseItems;
     mutable int32 CachedBaseRevision=0;

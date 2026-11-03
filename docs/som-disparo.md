@@ -25,3 +25,7 @@ Validação manual confirmada pelo usuário em 28/10/2026, com dois jogadores.
 Cada cliente ativa, no PlayerController local, um reverb curto e quente (`Marau6Audio::ConfigureAmbientReverb`: decaimento 1,1s, agudos amortecidos, ganho 0,32, volume 0,5) com a tag `Marau6Ambient`. É desativado no EndPlay para não ficar ativo no editor depois do PIE. Sem AudioVolume no mapa; um AudioVolume com prioridade maior pode substituí-lo por área no futuro.
 
 Todos os sons alimentam esse reverb. Os do próprio jogador (tiro, passos, pulo, aterrissagem) deixaram de usar PlaySound2D: tocam com atenuação sem espacialização nem queda por distância e envio constante (tiro 0,3; passos 0,15), porque sons 2D não enviam ao reverb. Sons de outros jogadores e bots ficam mais molhados com a distância: tiro 0,3→0,8 entre 3m e 80m, passos 0,2→0,6 entre 2m e 25m. Valores provisórios, para ajuste de ouvido.
+
+## Mixagem (03/11/2026)
+
+A Uzi e `S_RifleShot` (efeitos do disparo) tocam no mesmo volume: as duas fontes têm a mesma sonoridade (-18 LUFS). Volumes em `Marau6Audio.h`: cada camada 0,45 dono / 0,54 outros (juntas, o mesmo nível de antes), mesma queda com a distância (3 m a 80 m); passos 0,5 / 1,0; aterrissagem 0,8; pulo 0,6. Os passos são ~15 dB mais baixos na origem que a Uzi, por isso ficam perto do volume cheio. Tiros de outros jogadores caem em dB com a distância (NaturalSound, -60 dB no limite): tiroteio a 20 m fica bem abaixo do volume cheio e não cobre os passos próximos. A camada do rifle do dono também passou a alimentar o reverb.

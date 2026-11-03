@@ -91,7 +91,13 @@ public:
         for(int32 N=0;N<2;N++)for(TActorIterator<AMarau6PlayerController> It(Clients[N]);It;++It)if(It->IsLocalController())Local[N]=*It;
         for(TActorIterator<AMarau6PlayerController> It(Server);It;++It)if(It->GetBaseProfile()>0 && It->GetBaseProfile()<=2)Remote[It->GetBaseProfile()-1]=*It;
         if(!Local[0] || !Local[1])return false;
-        if(Phase==0){if(!Bridge->CanMutate())return false;Local[0]->ServerSelectProfile(1);Local[1]->ServerSelectProfile(2);Next();return false;}
+        if(Phase==0)
+        {
+            if(!Bridge->CanMutate() || !Local[0]->HasInventoryWidget())return false;Local[0]->ServerSelectProfile(1);Local[1]->ServerSelectProfile(2);
+            // The base capture uses the full-HD layout the base screen was designed at.
+            if(Render){auto Window=FSlateApplication::Get().FindWidgetWindow(Local[0]->GetInventoryWidget()->TakeWidget());if(Window)Window->Resize(FVector2D(1920,1080));}
+            Next();return false;
+        }
         if(Phase==1)
         {
             if(Local[0]->GetBaseProfile()!=1 || Local[1]->GetBaseProfile()!=2 || !Local[0]->InventoryUIItemAt(10) || !Local[1]->InventoryUIItemAt(10) || !Local[0]->HasInventoryWidget() || Local[0]->InventoryRequestPending() || Now-At<1)return false;

@@ -51,8 +51,8 @@ void UMarau6Footsteps::TickComponent(float Delta, ELevelTick TickType, FActorCom
     const bool bGrounded = Movement->IsMovingOnGround();
     const bool bOwnPlayer = Player && Owner->IsLocallyControlled();
     // Only the owner hears their own jump; everyone hears a hard landing.
-    if (bAlive && bOwnPlayer && bWasGrounded && !bGrounded && Owner->GetVelocity().Z > 0.f) Play(LandSound, .4f, JumpPitch);
-    if (bAlive && bGrounded && !bWasGrounded && LastVerticalSpeed < -LandSpeed) Play(LandSound, .5f, 1.f);
+    if (bAlive && bOwnPlayer && bWasGrounded && !bGrounded && Owner->GetVelocity().Z > 0.f) Play(LandSound, Marau6Audio::JumpVolume, JumpPitch);
+    if (bAlive && bGrounded && !bWasGrounded && LastVerticalSpeed < -LandSpeed) Play(LandSound, Marau6Audio::LandVolume, 1.f);
     bWasGrounded = bGrounded;
     LastVerticalSpeed = Owner->GetVelocity().Z;
     if (!bAlive || !bGrounded || Movement->IsCrouching() || Speed < MinSpeed) return;
@@ -60,7 +60,7 @@ void UMarau6Footsteps::TickComponent(float Delta, ELevelTick TickType, FActorCom
     if (Walked < Stride) return;
     Walked = 0.f;
     Foot ^= 1;
-    Play(StepSounds[Foot], bOwnPlayer ? .25f : .5f, FMath::FRandRange(.9f, 1.1f));
+    Play(StepSounds[Foot], bOwnPlayer ? Marau6Audio::StepOwner : Marau6Audio::StepWorld, FMath::FRandRange(.9f, 1.1f));
 }
 
 void UMarau6Footsteps::Play(USoundBase* Sound, float Volume, float Pitch) const

@@ -347,6 +347,23 @@ bool UMarau6ItemLedger::GrantWorld(FGuid Id,EMarau6ItemKind Kind,FVector Locatio
     SpawnWorld(Id,Location);return true;
 }
 
+bool UMarau6ItemLedger::GrantStarterRifle(UMarau6InventoryComponent* C)
+{
+    if(!Usable(C))return false;
+    const FGuid Owner=C->GetSessionInventoryId();
+    if(At(Owner,Marau6Slots::Weapon))return true;
+    FMarau6ItemRecord Record;Record.Item.Id=FGuid::NewGuid();Record.Item.Kind=EMarau6ItemKind::Rifle;Record.Item.Slot=INDEX_NONE;
+    Record.Item.Magazine=20;Record.Item.Reserve=40;
+    Record.Custody=EMarau6Custody::Recovery;Record.RecoveryLocation=C->Character()->GetActorLocation();
+    const FGuid Id=Record.Item.Id;Records.Add(Id,Record);
+    if(!Persist()){Records.Remove(Id);return false;}
+    // Already durable as loot: if equipping fails, the recovery tick drops it at the player's feet.
+    auto& Held=Records.FindChecked(Id);const auto Before=Held;
+    Held.Custody=EMarau6Custody::Inventory;Held.OwnerId=Owner;Held.Item.Slot=Marau6Slots::Weapon;
+    if(!Persist()){Held=Before;return false;}
+    Sync(Owner);return true;
+}
+
 bool UMarau6ItemLedger::ConsumeForHealing(UMarau6InventoryComponent* C,FGuid Id)
 {
     if(!Usable(C))return false;

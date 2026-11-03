@@ -15,6 +15,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/GameStateBase.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -103,6 +104,9 @@ AMarau6Character::AMarau6Character(const FObjectInitializer& ObjectInitializer)
     ThirdPersonRifle->SetOwnerNoSee(true);
     ThirdPersonRifle->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
 
+    static ConstructorHelpers::FObjectFinder<UAnimSequence> Reload(
+        TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Reload.MM_Rifle_Reload"));
+    ReloadAnimation = Reload.Object;
     static ConstructorHelpers::FObjectFinder<USkeletalMesh> Rifle(
         TEXT("/Game/Weapons/Lasgun/Meshes/SKM_Lasgun.SKM_Lasgun"));
     if (Rifle.Succeeded())
@@ -262,6 +266,7 @@ void AMarau6Character::GetLifetimeReplicatedProps(
     DOREPLIFETIME(AMarau6Character, LastHitDirection);
     DOREPLIFETIME(AMarau6Character, RaidStatus);
     DOREPLIFETIME_CONDITION(AMarau6Character, AmmoState, COND_OwnerOnly);
+    DOREPLIFETIME(AMarau6Character, bReloadPose);
 }
 
 void AMarau6Character::OnRep_Health()
@@ -466,6 +471,7 @@ void AMarau6Character::ServerReload_Implementation()
     }
 
     AmmoState.bReloading = true;
+    SetReloadPose(true);
     GetWorldTimerManager().SetTimer(ReloadTimer, this,
         &AMarau6Character::FinishReload, PrototypeReloadDuration, false);
     ForceNetUpdate();
@@ -489,6 +495,7 @@ void AMarau6Character::FinishReload()
     AmmoState.Magazine += Transferred;
     AmmoState.Reserve -= Transferred;
     AmmoState.bReloading = false;
+    SetReloadPose(false);
     ForceNetUpdate();
 }
 
@@ -503,6 +510,28 @@ void AMarau6Character::CancelReload()
         World->GetTimerManager().ClearTimer(ReloadTimer);
     }
     AmmoState.bReloading = false;
+    SetReloadPose(false);
+}
+
+void AMarau6Character::SetReloadPose(bool bValue)
+{
+    if (!HasAuthority() || bReloadPose == bValue) return;
+    bReloadPose = bValue;
+    OnRep_ReloadPose();
+}
+
+void AMarau6Character::OnRep_ReloadPose()
+{
+    if (GetNetMode() == NM_DedicatedServer || !ReloadAnimation) return;
+    // The first person body copies this pose, so one montage serves both views.
+    UAnimInstance* Pose = GetMesh()->GetAnimInstance();
+    if (!Pose) return;
+    if (bReloadPose)
+    {
+        Pose->PlaySlotAnimationAsDynamicMontage(ReloadAnimation, ReloadSlot, .15f, .2f,
+            ReloadAnimation->GetPlayLength() / PrototypeReloadDuration);
+    }
+    else Pose->StopSlotAnimation(.2f, ReloadSlot);
 }
 
 

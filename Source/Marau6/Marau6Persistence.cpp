@@ -253,6 +253,7 @@ void UMarau6Persistence::EnterRaid(AMarau6PlayerController* PC)
             PC->bInRaid=EntryPawn->SetAtBase(false);
             PC->BaseMessage=PC->bInRaid?TEXT("Entrada confirmada"):TEXT("Ponto ocupado; B tenta novamente sem reservar outro equipamento.");
             if(PC->bInRaid && !CommitLedger()){EntryPawn->SetAtBase(true);PC->bInRaid=false;}
+            else if(PC->bInRaid)Ledger->GrantStarterRifle(EntryPawn->GetInventory());
             PC->ForceNetUpdate();return;
         }
         PC->BaseMessage=TEXT("Entrada utilizada. Aguarde o outro perfil e use N para nova rodada.");return;
@@ -284,6 +285,7 @@ void UMarau6Persistence::EnterRaid(AMarau6PlayerController* PC)
         if(!C->bInRaid)C->BaseMessage=TEXT("Equipamento reservado; ponto ocupado. B tenta a entrada novamente.");
         C->ForceNetUpdate();
         if(!CommitLedger()){Pawn->SetAtBase(true);C->bInRaid=false;}
+        else if(C->bInRaid)GetWorld()->GetSubsystem<UMarau6ItemLedger>()->GrantStarterRifle(Pawn->GetInventory());
         FlushDeferredDeaths();
     });
 }

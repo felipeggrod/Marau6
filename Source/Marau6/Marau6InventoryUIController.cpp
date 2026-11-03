@@ -193,7 +193,7 @@ void AMarau6PlayerController::UpdateInventoryUI()
     }
 }
 void AMarau6PlayerController::PlayerTick(float Delta)
-{Super::PlayerTick(Delta);UpdateInventoryUI();}
+{Super::PlayerTick(Delta);UpdateInventoryUI();UpdateRaidGas();}
 void AMarau6PlayerController::TickActor(float Delta,ELevelTick Type,FActorTickFunction& Function)
 {
     // Dedicated-server remote controllers do not execute PlayerTick.

@@ -13,6 +13,12 @@
 #include "Materials/MaterialExpressionTextureCoordinate.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
 #include "Materials/MaterialExpressionAbs.h"
+#include "Materials/MaterialExpressionAdd.h"
+#include "Materials/MaterialExpressionComponentMask.h"
+#include "Materials/MaterialExpressionDivide.h"
+#include "Materials/MaterialExpressionSubtract.h"
+#include "Materials/MaterialExpressionTextureSampleParameter2D.h"
+#include "Engine/Texture2D.h"
 #include "Materials/MaterialExpressionConstant3Vector.h"
 #include "Materials/MaterialExpressionDotProduct.h"
 #include "Materials/MaterialExpressionTransform.h"
@@ -30,8 +36,10 @@
 #include "UObject/SavePackage.h"
 
 // Editor-only generator for the assets used by AMarau6ShotFX. Materials are built
-// from engine math nodes and the rifle report is imported from the WAV written by
-// scripts/Generate-RifleShot.py, so no external content is needed.
+// from engine math nodes over the flash and smoke textures painted by
+// scripts/Generate-ShotTextures.py; the rifle report and the decompression gas are
+// imported from the WAVs written by scripts/Generate-RifleShot.py and
+// scripts/Generate-Decompression.py, so no external content is needed.
 namespace Marau6ShotFXAssets
 {
 template<typename T> T* Add(UMaterial* M)
@@ -109,6 +117,28 @@ UMaterialExpression* TubeMask(UMaterial* M, float Exponent)
     return Mul(M, Inverse, Sharp);
 }
 
+// Samples tile Frame (its corner in UV, 0 or .5 per axis) of a 2x2 atlas at UV in [0, 1].
+UMaterialExpressionTextureSampleParameter2D* AtlasSample(UMaterial* M, UTexture* Texture, UMaterialExpression* UV)
+{
+    auto* Frame = Add<UMaterialExpressionVectorParameter>(M);
+    Frame->ParameterName = TEXT("Frame");
+    Frame->DefaultValue = FLinearColor::Transparent;
+    auto* Corner = Add<UMaterialExpressionComponentMask>(M);
+    Corner->Input.Connect(0, Frame);
+    Corner->R = Corner->G = true;
+    auto* Half = Add<UMaterialExpressionConstant>(M);
+    Half->R = .5f;
+    auto* Tile = Add<UMaterialExpressionAdd>(M);
+    Tile->A.Connect(0, Mul(M, UV, Half));
+    Tile->B.Connect(0, Corner);
+    auto* Sample = Add<UMaterialExpressionTextureSampleParameter2D>(M);
+    Sample->ParameterName = TEXT("Flash");
+    Sample->Texture = Texture;
+    Sample->SamplerType = SAMPLERTYPE_Color;
+    Sample->Coordinates.Connect(0, Tile);
+    return Sample;
+}
+
 bool Save(UMaterial* M)
 {
     M->PreEditChange(nullptr);
@@ -177,27 +207,87 @@ UMaterial* Decal(const TCHAR* Name, FLinearColor Tint, float Roughness, float Sh
     return M;
 }
 
-bool ImportReport()
+// Imports Saved/<Folder>/<Name> into Destination, replacing the asset of the same name.
+UObject* ImportGenerated(const TCHAR* Folder, const TCHAR* Name, const TCHAR* Destination, const TCHAR* Script)
 {
-    const FString Wav = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("SourceAudio/S_RifleShot.wav"));
-    if (!FPaths::FileExists(Wav))
+    const FString File = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / Folder / Name);
+    if (!FPaths::FileExists(File))
     {
-        UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX missing %s; run scripts/Generate-RifleShot.py first."), *Wav);
-        return false;
+        UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX missing %s; run scripts/%s first."), *File, Script);
+        return nullptr;
     }
     UAutomatedAssetImportData* Import = NewObject<UAutomatedAssetImportData>();
-    Import->Filenames.Add(Wav);
-    Import->DestinationPath = TEXT("/Game/Marau6/Audio");
+    Import->Filenames.Add(File);
+    Import->DestinationPath = Destination;
     Import->bReplaceExisting = true;
     const TArray<UObject*> Imported = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools")).Get().ImportAssetsAutomated(Import);
-    return Imported.Num() == 1 && Cast<USoundWave>(Imported[0]) && SavePackageOf(Imported[0]);
+    return Imported.Num() == 1 ? Imported[0] : nullptr;
+}
+bool ImportSound(const TCHAR* Name, const TCHAR* Script)
+{
+    UObject* Sound = ImportGenerated(TEXT("SourceAudio"), Name, TEXT("/Game/Marau6/Audio"), Script);
+    return Cast<USoundWave>(Sound) && SavePackageOf(Sound);
+}
+UTexture2D* ImportEffectTexture(const TCHAR* Name)
+{
+    auto* Texture = Cast<UTexture2D>(ImportGenerated(TEXT("SourceTextures"), Name, TEXT("/Game/Marau6/Effects"),
+        TEXT("Generate-ShotTextures.py")));
+    if (!Texture) return nullptr;
+    Texture->PreEditChange(nullptr);
+    Texture->LODGroup = TEXTUREGROUP_Effects;
+    Texture->CompressionSettings = TC_Default;
+    Texture->SRGB = true;
+    Texture->PostEditChange();
+    return SavePackageOf(Texture) ? Texture : nullptr;
 }
 
 void Setup()
 {
+    UTexture2D* FlashSide = ImportEffectTexture(TEXT("T_MuzzleFlash_Side.png"));
+    UTexture2D* FlashFront = ImportEffectTexture(TEXT("T_MuzzleFlash_Front.png"));
+    UTexture2D* SmokePuff = ImportEffectTexture(TEXT("T_MuzzleSmoke.png"));
+    if (!FlashSide || !FlashFront || !SmokePuff)
+    {
+        UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX asset generation failed: textures."));
+        return;
+    }
+
+    // Flame painted premultiplied: its colour is the emission. Each blade picks its
+    // texture (side or front) and atlas tile at runtime.
     UMaterial* Flash = Create(TEXT("M_MuzzleFlash"), BLEND_Additive);
-    Flash->GetEditorOnlyData()->EmissiveColor.Connect(0,
-        Mul(Flash, Mul(Flash, Color(Flash, FLinearColor(1.f, .55f, .2f)), Scalar(Flash, TEXT("Intensity"), 30.f)), RadialMask(Flash)));
+    Flash->GetEditorOnlyData()->EmissiveColor.Connect(0, Mul(Flash, Mul(Flash,
+        AtlasSample(Flash, FlashSide, Add<UMaterialExpressionTextureCoordinate>(Flash)),
+        Color(Flash, FLinearColor(1.f, .9f, .8f))), Scalar(Flash, TEXT("Intensity"), 14.f)));
+
+    // Muzzle smoke sprites: the quad is drawn at full size and Grow shrinks the puff
+    // inside it, so swelling only changes a parameter. Tile borders are clear, so
+    // clamping the scaled UV leaves the outside empty.
+    UMaterial* Muzzle = Create(TEXT("M_MuzzleSmoke"), BLEND_Translucent);
+    Muzzle->SetShadingModel(MSM_DefaultLit);
+    Muzzle->TranslucencyLightingMode = TLM_VolumetricNonDirectional;
+    auto* Centre = Add<UMaterialExpressionConstant>(Muzzle);
+    Centre->R = .5f;
+    auto* FromCentre = Add<UMaterialExpressionSubtract>(Muzzle);
+    FromCentre->A.Connect(0, Add<UMaterialExpressionTextureCoordinate>(Muzzle));
+    FromCentre->B.Connect(0, Centre);
+    auto* Shrunk = Add<UMaterialExpressionDivide>(Muzzle);
+    Shrunk->A.Connect(0, FromCentre);
+    Shrunk->B.Connect(0, Scalar(Muzzle, TEXT("Grow"), 1.f));
+    auto* Back = Add<UMaterialExpressionAdd>(Muzzle);
+    Back->A.Connect(0, Shrunk);
+    Back->B.Connect(0, Centre);
+    auto* Inside = Add<UMaterialExpressionSaturate>(Muzzle);
+    Inside->Input.Connect(0, Back);
+    auto* Puffs = AtlasSample(Muzzle, SmokePuff, Inside);
+    UMaterialExpression* Tone = Mul(Muzzle, Puffs, Color(Muzzle, FLinearColor(.62f, .6f, .58f)));
+    auto* Glow = Add<UMaterialExpressionConstant>(Muzzle);
+    Glow->R = .12f;
+    Muzzle->GetEditorOnlyData()->BaseColor.Connect(0, Tone);
+    Muzzle->GetEditorOnlyData()->EmissiveColor.Connect(0, Mul(Muzzle, Tone, Glow));
+    auto* Density = Add<UMaterialExpressionMultiply>(Muzzle);
+    Density->A.Connect(4, Puffs);
+    Density->B.Connect(0, Scalar(Muzzle, TEXT("Opacity"), .4f));
+    Muzzle->GetEditorOnlyData()->Opacity.Connect(0, Density);
 
     UMaterial* Tracer = Create(TEXT("M_Tracer"), BLEND_Additive);
     Tracer->GetEditorOnlyData()->EmissiveColor.Connect(0,
@@ -234,12 +324,13 @@ void Setup()
     UMaterial* Blood = Decal(TEXT("M_BloodDecal"), FLinearColor(.12f, 0.f, 0.f), .25f, 2.2f, .15f);
 
     bool bSaved = true;
-    for (UMaterial* M : { Flash, Tracer, Smoke, Puff, Hole, Blood }) bSaved &= Save(M);
-    if (!bSaved || !ImportReport())
+    for (UMaterial* M : { Flash, Muzzle, Tracer, Smoke, Puff, Hole, Blood }) bSaved &= Save(M);
+    if (!bSaved || !ImportSound(TEXT("S_RifleShot.wav"), TEXT("Generate-RifleShot.py"))
+        || !ImportSound(TEXT("S_Decompression.wav"), TEXT("Generate-Decompression.py")))
         UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX asset generation failed."));
 }
 static FAutoConsoleCommand SetupCommand(TEXT("Marau6.SetupShotFX"),
-    TEXT("Create or replace the shot materials in /Game/Marau6/Effects and import the rifle report."),
+    TEXT("Import the shot textures, create or replace the shot materials in /Game/Marau6/Effects and import the rifle report and decompression gas."),
     FConsoleCommandDelegate::CreateStatic(&Setup));
 }
 #endif

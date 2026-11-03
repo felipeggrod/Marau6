@@ -8,13 +8,14 @@ class UStaticMeshComponent;
 class UPointLightComponent;
 class USkeletalMeshComponent;
 class UMaterialInstanceDynamic;
+class UMaterialBillboardComponent;
 class USoundAttenuation;
 
 /**
  * Cosmetic, client-only presentation of one accepted shot, layered on top of
- * AMarau6ShotEffect: muzzle flash and light, the rifle report, a tracer and a
- * smoke trail along the server's hit line, and an impact that is dust, sparks
- * and a bullet hole on surfaces or blood on characters.
+ * AMarau6ShotEffect: a textured muzzle flash and light, puffs of muzzle smoke,
+ * the rifle report, a tracer and a smoke trail along the server's hit line, and
+ * an impact that is dust, sparks and a bullet hole on surfaces or blood on characters.
  */
 UCLASS()
 class AMarau6ShotFX : public AActor
@@ -44,7 +45,10 @@ private:
     UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SmokeMaterial;
     UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> PuffMaterial;
     UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> DropMaterial;
+    UPROPERTY() TArray<TObjectPtr<UMaterialBillboardComponent>> MuzzleSmoke;
+    UPROPERTY() TArray<TObjectPtr<UMaterialInstanceDynamic>> MuzzleSmokeMaterials;
     UPROPERTY() TObjectPtr<USoundAttenuation> ReportAttenuation;
+    UPROPERTY() TObjectPtr<USoundAttenuation> OwnerReportAttenuation;
 
     FVector TrailStart = FVector::ZeroVector;
     FVector TrailDirection = FVector::ForwardVector;
@@ -53,6 +57,10 @@ private:
     FVector ImpactNormal = FVector::UpVector;
     TArray<FVector> DebrisStart;
     TArray<FVector> DebrisVelocity;
+    struct FMuzzlePuff { FVector Start, Velocity; float Radius, Seconds; };
+    TArray<FMuzzlePuff> MuzzlePuffs;
+    float MuzzleSmokeOpacity = 0.f;
+    float MuzzleSmokeRise = 0.f;
     float Age = 0.f;
     bool bFlash = false;
     bool bImpact = false;
