@@ -1,6 +1,7 @@
 #include "Marau6PlayerController.h"
 #include "Marau6InventoryUIModel.h"
 #include "Marau6InventoryWidget.h"
+#include "Marau6HUDWidget.h"
 #include "Marau6InventorySlot.h"
 #include "Marau6Character.h"
 #include "Marau6HealingComponent.h"
@@ -184,6 +185,11 @@ void AMarau6PlayerController::UpdateInventoryUI()
     if(Visible && !InventoryWidget)
     {InventoryWidget=CreateWidget<UMarau6InventoryWidget>(this,UMarau6InventoryWidget::StaticClass());if(InventoryWidget)InventoryWidget->AddToPlayerScreen(20);}
     if(InventoryWidget)InventoryWidget->SetVisibility(Visible?ESlateVisibility::Visible:ESlateVisibility::Collapsed);
+    // The raid HUD steps aside while the inventory covers the screen.
+    const bool ShowHUD=!AtBase && !Visible && Cast<AMarau6Character>(GetPawn());
+    if(ShowHUD && !HUDWidget)
+    {HUDWidget=CreateWidget<UMarau6HUDWidget>(this,UMarau6HUDWidget::StaticClass());if(HUDWidget)HUDWidget->AddToPlayerScreen(10);}
+    if(HUDWidget)HUDWidget->SetVisibility(ShowHUD?ESlateVisibility::HitTestInvisible:ESlateVisibility::Collapsed);
     if(Visible!=bInventoryInputActive)
     {
         bInventoryInputActive=Visible;bShowMouseCursor=Visible;CancelInventoryDrag();
@@ -202,6 +208,7 @@ void AMarau6PlayerController::TickActor(float Delta,ELevelTick Type,FActorTickFu
 void AMarau6PlayerController::EndPlay(EEndPlayReason::Type Reason)
 {
     CancelInventoryDrag();if(InventoryWidget){InventoryWidget->RemoveFromParent();InventoryWidget=nullptr;}
+    if(HUDWidget){HUDWidget->RemoveFromParent();HUDWidget=nullptr;}
     // An activated reverb outlives PIE on the editor's audio device unless removed.
     if(IsLocalPlayerController())UGameplayStatics::DeactivateReverbEffect(this,Marau6Audio::AmbientReverbTag);
     if(IsLocalPlayerController()){bShowMouseCursor=false;bInventoryInputActive=false;if(GetLocalPlayer() && GetLocalPlayer()->ViewportClient)SetInputMode(FInputModeGameOnly());}

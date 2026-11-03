@@ -56,6 +56,16 @@ void AMarau6PrototypeHUD::DrawHUD()
 
     const AMarau6Character* Character = Cast<AMarau6Character>(PlayerOwner->GetPawn());
     if (!Character) return;
+    if (BasePC && BasePC->HasHUDWidget())
+    {
+        if (Character->CanParticipate() && !Character->IsInventoryOpen())
+        {
+            const float X = Canvas->ClipX * 0.5f, Y = Canvas->ClipY * 0.5f;
+            DrawLine(X - 7.f, Y, X + 7.f, Y, FLinearColor(.91f, .89f, .84f, .9f), 1.5f);
+            DrawLine(X, Y - 7.f, X, Y + 7.f, FLinearColor(.91f, .89f, .84f, .9f), 1.5f);
+        }
+        return;
+    }
 
     DrawRect(FLinearColor(0.f, 0.f, 0.f, 0.65f), 12.f, 12.f, 560.f, 210.f);
     const bool bAlive = Character->IsAlive();

@@ -6,6 +6,7 @@
 #include "UObject/StrongObjectPtr.h"
 #include "Marau6PlayerController.h"
 #include "Marau6InventoryWidget.h"
+#include "Marau6HUDWidget.h"
 #include "Marau6InventorySlot.h"
 #include "Marau6Character.h"
 #include "Marau6Persistence.h"
@@ -51,7 +52,7 @@ class FInventoryPIEFlow : public IAutomationLatentCommand
     TSharedPtr<FInventoryPIEData> D;
     int32 Phase=0;double Started=FPlatformTime::Seconds(),At=Started,NextRequest=0;
     FGuid Rifle,OwnRifle2,AmmoBox;int32 AmmoPhase=0;double AmmoAt=0;FString Round;FMarau6InventoryUIRequest OldBase;
-    bool Render=false;
+    bool Render=false,bHUDShot=false;
     void Next(){UE_LOG(LogTemp,Display,TEXT("MARAU6_UI_PIE phase %d passed"),Phase);++Phase;At=FPlatformTime::Seconds();NextRequest=0;}
     bool Move(AMarau6PlayerController* PC,int32 Source,int32 Destination)
     {
@@ -137,6 +138,14 @@ public:
             if(!Local[0]->IsInRaid() || !Local[1]->IsInRaid())
             {if(Now>=NextRequest){for(auto* PC:Local)if(!PC->IsInRaid())PC->ServerEnterRaid();NextRequest=Now+.5;}return false;}
             if(!CA->CanParticipate() || !CA->GetInventory()->ItemAt(10) || !B->GetInventory()->ItemAt(10))return false;
+            if(Render && !bHUDShot)
+            {
+                if(!Local[0]->HasHUDWidget() || Now-At<1.5)return false;bHUDShot=true;
+                TArray<FColor> Pixels;FIntVector Size;auto Window=FSlateApplication::Get().FindWidgetWindow(Local[0]->GetHUDWidget()->TakeWidget());
+                const bool Captured=Window.IsValid() && FSlateApplication::Get().TakeScreenshot(Window.ToSharedRef(),Pixels,Size);
+                D->Test->TestTrue(TEXT("Rendered raid HUD screenshot captured"),Captured && Size.X>0 && Size.Y>0);
+                if(Captured){TArray<uint8> PNG;FImageUtils::CompressImageArray(Size.X,Size.Y,Pixels,PNG);FFileHelper::SaveArrayToFile(PNG,*(FPaths::ProjectDir()/TEXT("LocalSettings")/TEXT("hud-raid.png")));}
+            }
             const FMarau6Item* Kit=B->GetInventory()->ItemAt(10);
             D->Test->TestTrue(TEXT("Basic kit enters with a new 20/40 rifle"),Kit->Id!=OwnRifle2 && Kit->Magazine==20 && Kit->Reserve==40 && Kit->Durability==10000);
             D->Test->TestTrue(TEXT("Basic kit leaves the backpack empty"),!B->GetInventory()->ItemAt(0));

@@ -9,6 +9,7 @@
 
 class UMarau6Persistence;
 class UMarau6InventoryWidget;
+class UMarau6HUDWidget;
 class UInputMappingContext;
 class UUserWidget;
 class UReverbEffect;
@@ -50,6 +51,8 @@ public:
     bool InventoryRequestPending() const;
     bool HasOwnInventoryDrag() const;
     bool HasInventoryWidget() const { return InventoryWidget!=nullptr; }
+    bool HasHUDWidget() const { return HUDWidget!=nullptr; }
+    UMarau6HUDWidget* GetHUDWidget() const {return HUDWidget.Get();}
     UMarau6InventoryWidget* GetInventoryWidget() const {return InventoryWidget.Get();}
     const TArray<FMarau6Item>& GetInventoryUIItems() const;
     const FMarau6Item* InventoryUIItemAt(int32 Slot) const;
@@ -88,6 +91,7 @@ private:
     UPROPERTY(Replicated) bool bBasicKit=false;
     UPROPERTY(Replicated) FGuid InventoryContext;
     UPROPERTY(Transient) TObjectPtr<UMarau6InventoryWidget> InventoryWidget;
+    UPROPERTY(Transient) TObjectPtr<UMarau6HUDWidget> HUDWidget;
     /** Local listener only: the map's soft room tail, see Marau6Audio. */
     UPROPERTY() TObjectPtr<UReverbEffect> AmbientReverb;
     /** Local listener only: decompression gas on raid entry. */
