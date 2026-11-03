@@ -216,6 +216,13 @@ UObject* ImportGenerated(const TCHAR* Folder, const TCHAR* Name, const TCHAR* De
         UE_LOG(LogTemp, Error, TEXT("MARAU6_SHOTFX missing %s; run scripts/%s first."), *File, Script);
         return nullptr;
     }
+    // An asset already loaded at startup (the player controller's gas) keeps its file
+    // open for lazy bulk data; load it fully and let go of the file so it can be replaced.
+    if (UPackage* Existing = FindPackage(nullptr, *(FString(Destination) / FPaths::GetBaseFilename(File))))
+    {
+        Existing->FullyLoad();
+        ResetLoaders(Existing);
+    }
     UAutomatedAssetImportData* Import = NewObject<UAutomatedAssetImportData>();
     Import->Filenames.Add(File);
     Import->DestinationPath = Destination;

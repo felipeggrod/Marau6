@@ -83,8 +83,8 @@ def front_tile():
     arms *= np.clip(1 - r / arm_reach, 0, 1) ** 1.1
     turb = fbm((TILE, TILE), base=4)
     licks = 1 - np.abs(2 * fbm((TILE, TILE), base=5) - 1)
-    disc = np.exp(-(r / 0.3) ** 2) * (0.25 + 0.55 * licks)
-    core = np.exp(-(r / 0.075) ** 2)
+    disc = np.exp(-(r / 0.38) ** 2) * (0.35 + 0.6 * licks)
+    core = np.exp(-(r / 0.12) ** 2)
     heat = np.clip(np.maximum(disc, arms * (0.45 + 0.6 * turb)) * 0.9 + core, 0, 1)
     heat = gaussian_filter(heat, 0.8) * np.clip((1 - r) * 6, 0, 1)
     return np.dstack([fire(heat), heat])

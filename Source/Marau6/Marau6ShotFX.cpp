@@ -81,7 +81,7 @@ AMarau6ShotFX::AMarau6ShotFX()
     const FTransform Blades[] = {
         FTransform(FRotator(0, 0, 0), FVector(20, 0, 0), FVector(.4, .17, 1)),
         FTransform(FRotator(0, 0, 90), FVector(20, 0, 0), FVector(.4, .17, 1)),
-        FTransform(FRotator(90, 0, 0), FVector(2, 0, 0), FVector(.26, .26, 1)) };
+        FTransform(FRotator(90, 0, 0), FVector(7, 0, 0), FVector(.32, .32, 1)) };
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(Blades); ++Index)
     {
         UStaticMeshComponent* Blade = MakeCosmeticMesh(this, *FString::Printf(TEXT("FlashBlade%d"), Index), Plane.Object, FlashRoot);
@@ -181,7 +181,7 @@ void AMarau6ShotFX::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson, co
     // and stay fainter so they do not cloud the sights.
     UMaterialInterface* PuffSmoke = bMuzzle ? Load<UMaterialInterface>(MuzzleSmokePath) : nullptr;
     const float Scale = bFirstPerson ? FirstPersonScale : 1.f;
-    MuzzleSmokeOpacity = bFirstPerson ? .22f : .4f;
+    MuzzleSmokeOpacity = bFirstPerson ? .32f : .4f;
     MuzzleSmokeRise = 14.f * Scale;
     for (int32 Index = 0; PuffSmoke && Index < MuzzleSmoke.Num(); ++Index)
     {

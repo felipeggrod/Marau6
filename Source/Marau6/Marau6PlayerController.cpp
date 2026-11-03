@@ -32,18 +32,13 @@ AMarau6PlayerController::AMarau6PlayerController()
     Marau6Audio::ConfigureOwnerSend(GasAttenuation->Attenuation, .3f);
 }
 
-void AMarau6PlayerController::PlayGas(float Pitch)
-{
-    if(GasSound)UGameplayStatics::PlaySoundAtLocation(this, GasSound, GetFocalLocation(), FRotator::ZeroRotator,
-        Marau6Audio::GasVolume, Pitch, 0.f, GasAttenuation);
-}
-
 // bInRaid is set by the server and replicated; a listen server host has no OnRep, so watch it here.
 void AMarau6PlayerController::UpdateRaidGas()
 {
     if(!IsLocalPlayerController() || bInRaid==bHeardRaid)return;
     bHeardRaid=bInRaid;
-    if(bInRaid)PlayGas(Marau6Audio::GasRaidPitch);
+    if(bInRaid && GasSound)UGameplayStatics::PlaySoundAtLocation(this, GasSound, GetFocalLocation(), FRotator::ZeroRotator,
+        Marau6Audio::GasVolume, Marau6Audio::GasPitch, 0.f, GasAttenuation);
 }
 
 void AMarau6PlayerController::BeginPlay()
@@ -58,7 +53,6 @@ void AMarau6PlayerController::BeginPlay()
         ClientSetHUD(AMarau6PrototypeHUD::StaticClass());
         UGameplayStatics::ActivateReverbEffect(this, AmbientReverb, Marau6Audio::AmbientReverbTag,
             0.f, Marau6Audio::AmbientReverbVolume, .5f);
-        PlayGas(Marau6Audio::GasStartPitch);
     }
 
 	

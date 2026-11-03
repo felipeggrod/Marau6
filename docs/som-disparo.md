@@ -29,3 +29,7 @@ Todos os sons alimentam esse reverb. Os do próprio jogador (tiro, passos, pulo,
 ## Mixagem (03/11/2026)
 
 A Uzi e `S_RifleShot` (efeitos do disparo) tocam no mesmo volume: as duas fontes têm a mesma sonoridade (-18 LUFS). Volumes em `Marau6Audio.h`: cada camada 0,45 dono / 0,54 outros (juntas, o mesmo nível de antes), mesma queda com a distância (3 m a 80 m); passos 0,5 / 1,0; aterrissagem 0,8; pulo 0,6. Os passos são ~15 dB mais baixos na origem que a Uzi, por isso ficam perto do volume cheio. Tiros de outros jogadores caem em dB com a distância (NaturalSound, -60 dB no limite): tiroteio a 20 m fica bem abaixo do volume cheio e não cobre os passos próximos. A camada do rifle do dono também passou a alimentar o reverb.
+
+## Descompressão na entrada da partida (03/11/2026)
+
+`S_Decompression` é um jato de gás sintetizado ("pfvvshhhh": estalo da vedação, sopro grave que sobe para um chiado agudo, cauda de ~2,4s), gerado por `scripts/Generate-Decompression.py` em `Saved/SourceAudio` e importado por `Marau6.SetupShotFX`. Toca só para o jogador local, quando `bInRaid` passa a verdadeiro (entrada na partida pela base; B). Não toca ao iniciar o jogo nem ao voltar para a base. Volume 0,5, pitch 1,15, sem espacialização, com envio 0,3 ao reverb (`Marau6Audio::GasVolume`/`GasPitch`). Mapas sem base persistente não têm entrada na partida e, portanto, não tocam o som.

@@ -18,8 +18,8 @@ namespace Marau6Audio
     static constexpr float GunfireInner = 300.f, GunfireFalloff = 7700.f;
     static constexpr float StepOwner = .5f, StepWorld = 1.f;
     static constexpr float LandVolume = .8f, JumpVolume = .6f;
-    // Decompression gas on game start and, a little higher, on raid entry.
-    static constexpr float GasVolume = .5f, GasStartPitch = 1.f, GasRaidPitch = 1.15f;
+    // Decompression gas on raid entry, pitched up a little for a tighter hiss.
+    static constexpr float GasVolume = .5f, GasPitch = 1.15f;
 
     /** Short, warm room tail: grounds dry clips without washing out gunfire. */
     void ConfigureAmbientReverb(UReverbEffect& Reverb);

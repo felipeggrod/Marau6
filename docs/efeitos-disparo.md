@@ -13,3 +13,11 @@ Development Editor / Win64 compilado. Cinco testes Marau6.Combat aprovados: Heal
 Teste manual realizado com sucesso pelo usuário: em duas janelas Play As Client, observe o clarão da própria arma e da arma do outro jogador. Atire em parede, chão e personagem e confira o brilho no impacto. Atire para o céu: clarão sem impacto flutuante. Repita durante recarga e vazio: não deve haver efeito de tiro. Vida, dano e munição devem manter o comportamento validado.
 
 Validação manual confirmada pelo usuário em 28/10/2026, com dois jogadores.
+
+## Clarão texturizado e fumaça na boca (03/11/2026)
+
+O clarão usa texturas pintadas por `scripts/Generate-ShotTextures.py` (atlas 2x2, uma variação sorteada por lâmina a cada tiro): `T_MuzzleFlash_Side` nas duas lâminas cruzadas ao longo do cano (chama com línguas de fogo, boca na borda esquerda) e `T_MuzzleFlash_Front` na lâmina de frente (estrela), 7cm à frente do soquete para não ficar escondida pela boca da lasgun. `M_MuzzleFlash` é aditivo, emissão = textura × cor × intensidade 14.
+
+Quatro baforadas de fumaça (`UMaterialBillboardComponent`, sempre de frente para a câmera, textura `T_MuzzleSmoke`) saem da boca a cada tiro: empurradas pela explosão, freiam no ar, crescem, sobem e somem em 0,8–1,4s. Ficam no mundo, sem acompanhar a arma. Para o dono, saem da boca como ela é desenhada (escala de primeira pessoa) e são mais transparentes (0,32 contra 0,4) para não cobrir a mira. `M_MuzzleSmoke` é translúcido iluminado; o parâmetro Grow encolhe a fumaça dentro do quad, então crescer só altera um parâmetro.
+
+Regenerar: `python -I scripts/Generate-ShotTextures.py Saved/SourceTextures`, `python -I scripts/Generate-RifleShot.py Saved/SourceAudio/S_RifleShot.wav`, `python -I scripts/Generate-Decompression.py Saved/SourceAudio/S_Decompression.wav` e então `Marau6.SetupShotFX` com o editor fechado (`UnrealEditor-Cmd.exe Marau6.uproject -ExecCmds="Marau6.SetupShotFX,QUIT_EDITOR" -unattended -nullrhi`).
