@@ -110,11 +110,10 @@ AMarau6Character::AMarau6Character(const FObjectInitializer& ObjectInitializer)
     static ConstructorHelpers::FObjectFinder<UAnimSequence> Reload(
         TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Reload.MM_Rifle_Reload"));
     ReloadAnimation = Reload.Object;
-    static ConstructorHelpers::FObjectFinder<USoundBase> Cloth(TEXT("/Game/Marau6/Audio/S_Reload_Cloth.S_Reload_Cloth"));
     static ConstructorHelpers::FObjectFinder<USoundBase> MagOut(TEXT("/Game/Marau6/Audio/S_Reload_MagOut.S_Reload_MagOut"));
     static ConstructorHelpers::FObjectFinder<USoundBase> MagIn(TEXT("/Game/Marau6/Audio/S_Reload_MagIn.S_Reload_MagIn"));
     static ConstructorHelpers::FObjectFinder<USoundBase> Charge(TEXT("/Game/Marau6/Audio/S_Reload_Charge.S_Reload_Charge"));
-    ReloadCloth = Cloth.Object; ReloadMagOut = MagOut.Object; ReloadMagIn = MagIn.Object; ReloadCharge = Charge.Object;
+    ReloadMagOut = MagOut.Object; ReloadMagIn = MagIn.Object; ReloadCharge = Charge.Object;
     static ConstructorHelpers::FObjectFinder<USkeletalMesh> Rifle(
         TEXT("/Game/Weapons/Lasgun/Meshes/SKM_Lasgun.SKM_Lasgun"));
     if (Rifle.Succeeded())
@@ -565,8 +564,7 @@ void AMarau6Character::OnRep_ReloadPose()
     ReloadSoundTimers.Reset();
     if (bReloadPose)
     {
-        const TPair<float, USoundBase*> Cues[] = { {.0f, ReloadCloth}, {.24f, ReloadMagOut}, {.53f, ReloadMagIn},
-            {.70f, ReloadCharge}, {.84f, ReloadCloth} };
+        const TPair<float, USoundBase*> Cues[] = { {.24f, ReloadMagOut}, {.53f, ReloadMagIn}, {.70f, ReloadCharge} };
         for (const auto& [At, Sound] : Cues)
         {
             if (!Sound) continue;
@@ -721,6 +719,7 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
     FVector ReloadShift = FVector::ZeroVector;
     FRotator ReloadTurn = FRotator::ZeroRotator;
     float RigAlpha = 1.f;
+    float ReloadArmsPitch = 0.f;
     if (ReloadPoseStart >= 0.0)
     {
         const float T = static_cast<float>((GetWorld()->GetTimeSeconds() - ReloadPoseStart) / PrototypeReloadDuration);
@@ -732,6 +731,9 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
         // off the handguard to the magazine and back; it takes the rifle again to finish.
         RigAlpha = 1.f - FMath::SmoothStep(.06f, .2f, T) * (1.f - FMath::SmoothStep(.78f, .93f, T));
         ReloadShift = FVector(-2.f * Body - 3.f * Charge, -5.f * Body, 1.f * Body - 2.f * MagOut + 1.5f * MagIn);
+        // Pitch the arms up around the camera instead of lifting them: the hands and the
+        // magazine swap come into view while the hidden collar near the pivot stays out.
+        ReloadArmsPitch = 16.f * FMath::SmoothStep(.06f, .2f, T) * (1.f - FMath::SmoothStep(.78f, .93f, T));
     }
 
     ShotKick = FMath::FInterpTo(ShotKick, 0.f, DeltaSeconds, 18.f);
@@ -742,7 +744,7 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
     // both hands on the weapon, so turning it angles the rifle naturally.
     const FVector Offset = FirstPersonArmsOffset + FirstPersonAimOffset * AimAlpha + SprintArmsOffset * SprintAlpha
         + Bob + ReloadShift + FVector(-2.2f * Kick, SwayRotation.Yaw * .15f, SwayRotation.Pitch * .15f);
-    FirstPersonMesh->SetRelativeTransform(ArmsNeutral * FTransform(Offset));
+    FirstPersonMesh->SetRelativeTransform(ArmsNeutral * FTransform(FRotator(ReloadArmsPitch, 0.f, 0.f), Offset));
     ViewModelAim->SetRelativeRotation(SprintAimRotation * SprintAlpha + SwayRotation + BobTurn + ReloadTurn
         + FRotator(1.5f * Kick, 0.f, 0.f));
 

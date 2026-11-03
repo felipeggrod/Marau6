@@ -66,7 +66,8 @@ void CaptureViewModel(UWorld* World)
         if(Now-S->At<Shot.Delay)return true;
         const FString File=FPaths::ConvertRelativePathToFull(FPaths::ProjectDir()/TEXT("LocalSettings")
             /FString::Printf(TEXT("viewmodel_%s.png"),*Shot.Name));
-        FScreenshotRequest::RequestScreenshot(File,false,false);
+        // With UI: the raid HUD is a Slate widget and belongs in the inspection.
+        FScreenshotRequest::RequestScreenshot(File,true,false);
         UE_LOG(LogTemp,Display,TEXT("MARAU6_VIEWMODEL requested %s"),*File);
         ++S->Shot;S->Phase=3;S->At=Now;return true;
     }));

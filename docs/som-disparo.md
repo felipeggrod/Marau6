@@ -38,19 +38,8 @@ Todos os sons alimentam esse reverb. Os do próprio jogador (tiro, passos, pulo,
 
 `S_Decompression` é um jato de gás sintetizado ("pfvvshhhh": estalo da vedação, sopro grave que sobe para um chiado agudo, cauda de ~2,4s), gerado por `scripts/Generate-Decompression.py` em `Saved/SourceAudio` e importado por `Marau6.SetupShotFX`. Toca só para o jogador local, quando `bInRaid` passa a verdadeiro (entrada na partida pela base; B). Não toca ao iniciar o jogo nem ao voltar para a base. Volume 0,5, pitch 1,15, sem espacialização, com envio 0,3 ao reverb (`Marau6Audio::GasVolume`/`GasPitch`). Mapas sem base persistente não têm entrada na partida e, portanto, não tocam o som.
 
-## Recarga (02/11/2026)
+## Recarga
 
-Quatro sons curtos sintetizados para a recarga do rifle, mono 16-bit 44,1kHz, pico -1 dBFS e cerca de -19 LUFS (perto dos passos, bem abaixo do tiro), em `/Game/Marau6/Audio`:
+Gravação real, não sintetizada: `SourceArt/Audio/reload_godot_fps_controller.wav`, do projeto First-Person-Controller-FPS de Danyl Bekhoucha (código MIT; sons royalty free com crédito obrigatório ao autor/fonte). O clipe tem três batidas de metal, cortadas e niveladas (cerca de -27 LUFS, pico -1 dBFS) em `S_Reload_MagOut` (0,14-0,36 s), `S_Reload_MagIn` (0,34-0,66 s) e `S_Reload_Charge` (0,68-1,04 s), importadas para `/Game/Marau6/Audio`. Tocam em 0,24 / 0,53 / 0,70 da recarga de 2 s. Substituíram os sons sintetizados da primeira versão (inclusive o de tecido, removido).
 
-- `S_Reload_Cloth` (0,35s, -18,9 LUFS): manga e equipamento se mexendo junto com os braços — sopro de ruído filtrado, estalinhos de tecido, rangido leve de couro e toque de fivela.
-- `S_Reload_MagOut` (0,40s, -19,6 LUFS): clique do botão de liberação, batida surda do carregador soltando e o metal deslizando para fora com raspagem, terminando num tique ao sair do poço.
-- `S_Reload_MagIn` (0,40s, -19,2 LUFS): carregador novo subindo com raspagem crescente e "clack" metálico firme ao travar (estalo, baque grave e parciais de aço), com a trava fechando logo depois.
-- `S_Reload_Charge` (0,45s, -19,1 LUFS): alavanca de manejo puxada (deslize com catraca de cliques que se espaçam), batente traseiro e retorno com estalo seco e corpo metálico.
-
-Gerados por `scripts/Generate-ReloadSounds.py` (semente fixa, numpy + scipy, um fluxo aleatório por som; cada um com drive de saturação próprio e normalizado a -1 dBFS) e importados com o commandlet ImportAssets (JSON com caminhos absolutos, `DestinationPath` `/Game/Marau6/Audio`, `bReplaceExisting` verdadeiro; o erro "Invalid Destination Path ()" de um grupo vazio extra é inofensivo):
-
-`python -I scripts/Generate-ReloadSounds.py Saved/SourceAudio`
-
-`"D:\Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "D:\UnityProjects\marau6\Marau6.uproject" -run=ImportAssets -importsettings=<json> -nosourcecontrol -unattended -nopause -stdout`
-
-Medição: `ffmpeg -i f.wav -af "apad=pad_dur=1,ebur128=peak=true" -f null -` (o preenchimento com silêncio é necessário porque o ebur128 integra em blocos de 400ms) e `volumedetect`. Sem verificação auditiva até aqui; ligação aos eventos da recarga fica no código C++.
+Para recortar de novo: `ffmpeg -ss <início> -t <duração> -i SourceArt/Audio/reload_godot_fps_controller.wav -ac 1 -ar 44100 -sample_fmt s16 -af "afade=t=in:d=0.004,afade=t=out:st=<duração-0.05>:d=0.05" Saved/SourceAudio/<nome>.wav`, ajustar o ganho com `volume=` e importar com o commandlet ImportAssets (`bReplaceExisting`).

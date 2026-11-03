@@ -24,11 +24,17 @@ O corpo em primeira pessoa é o soldado inteiro. Para o dono, as seções de mat
 - Camada de som do rifle (`S_RifleShot`) sobre o som atual: sem posição para o dono, espacial para os outros.
 - Traçante a 500 m/s e rastro de fumaça que alarga, sobe e some em 1,4 s. Para o dono, o rastro começa na boca do cano desenhada (escala de primeira pessoa).
 - No impacto em superfície: poeira, faíscas e marca de bala por 20 s. Em personagem: névoa e gotas de sangue e manchas na parede atrás e no chão abaixo, só em geometria estática, por 30 s.
+- No impacto, a poeira (ou a névoa de sangue) é um sprite voltado para a câmera que cresce e some, suavizado onde encosta na superfície; as gotas de sangue em voo são tubos (`M_BloodDrop`).
 
-Os materiais (`M_MuzzleFlash`, `M_Tracer`, `M_ShotSmoke`, `M_ImpactPuff`, `M_BulletHole`, `M_BloodDecal`) usam só nós matemáticos do motor. O som é sintetizado por `scripts/Generate-RifleShot.py`. Para regenerar:
+Os materiais (`M_MuzzleFlash`, `M_MuzzleSmoke`, `M_Tracer`, `M_ShotSmoke`, `M_ImpactPuff`, `M_BloodDrop`, `M_BulletHole`, `M_BloodDecal`) são montados em C++ por `Marau6.SetupShotFX` (`Source/Marau6/Tests/Marau6ShotFXSetup.cpp`). As texturas são atlas 2x2 de variações; cada clarão, fumaça, poeira e decal sorteia um quadro (parâmetro `Frame`):
 
-1. `python -I scripts/Generate-RifleShot.py Saved/SourceAudio/S_RifleShot.wav`
-2. Com o editor fechado: `UnrealEditor-Cmd.exe Marau6.uproject -ExecCmds="Marau6.SetupShotFX" -unattended -nullrhi`, encerrando após `S_RifleShot saved=1` no log.
+- `scripts/Generate-ShotTextures.py`: `T_MuzzleFlash_Side`, `T_MuzzleFlash_Front`, `T_MuzzleSmoke` (512 px).
+- `scripts/Generate-ImpactTextures.py` (1024 px): `T_BloodSplatter` (mancha com gotas satélites e respingos alongados, centro mais escuro e borda úmida; brilho maior onde o sangue é espesso), `T_BloodMist` (névoa com respingos, trocada no `M_ImpactPuff` em acertos em personagem), `T_BulletHole` com o normal map `T_BulletHole_N` (furo, cratera esmagada, borda lascada, rachaduras e fuligem) e `T_ImpactDust` (nuvem de poeira com cascalho).
+
+O comando também importa `Saved/SourceAudio/S_RifleFire.wav` (ver `docs/som-disparo.md`) e `S_Decompression.wav` (`scripts/Generate-Decompression.py`). Para regenerar:
+
+1. `python -I scripts/Generate-ShotTextures.py Saved/SourceTextures` e `python -I scripts/Generate-ImpactTextures.py Saved/SourceTextures`
+2. Com o editor fechado: `UnrealEditor-Cmd.exe Marau6.uproject -ExecCmds="Marau6.SetupShotFX,QUIT_EDITOR" -unattended -nullrhi`; o log mostra `MARAU6_SHOTFX <asset> saved=1` para cada textura e material.
 
 Na primeira execução os shaders novos compilam em segundo plano; os primeiros disparos podem aparecer sem efeito.
 

@@ -39,7 +39,7 @@ private:
     UPROPERTY() TObjectPtr<UPointLightComponent> FlashLight;
     UPROPERTY() TObjectPtr<UStaticMeshComponent> Tracer;
     UPROPERTY() TObjectPtr<UStaticMeshComponent> Smoke;
-    UPROPERTY() TObjectPtr<UStaticMeshComponent> Puff;
+    UPROPERTY() TObjectPtr<UMaterialBillboardComponent> Puff;
     UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> Debris;
     UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SmokeMaterial;
     UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> PuffMaterial;
@@ -58,6 +58,7 @@ private:
     TArray<FMuzzlePuff> MuzzlePuffs;
     float MuzzleSmokeOpacity = 0.f;
     float MuzzleSmokeRise = 0.f;
+    float PuffMaxRadius = 1.f;
     float Age = 0.f;
     bool bFlash = false;
     bool bImpact = false;

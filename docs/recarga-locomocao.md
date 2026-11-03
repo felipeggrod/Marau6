@@ -16,7 +16,7 @@ R abre as caixas de munição da mochila (e do safe pocket) direto na reserva, 2
 
 ## Sons da recarga
 
-Tocam no ritmo da recarga encenada (frações dos 2 s): braços (0), carregador saindo (0,24), carregador entrando (0,53), ferrolho (0,70), braços (0,84). Para o dono sem posição; para os outros nos pés do personagem, com a mesma atenuação dos passos. Recarga cancelada interrompe os sons pendentes.
+Gravação real recortada em três (ver docs/som-disparo.md), no ritmo da recarga encenada (frações dos 2 s): carregador saindo (0,24), carregador entrando (0,53), ferrolho (0,70). Para o dono sem posição; para os outros nos pés do personagem, com a mesma atenuação dos passos. Recarga cancelada interrompe os sons pendentes.
 
 ## Animações
 

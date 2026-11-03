@@ -35,16 +35,27 @@ const TCHAR* MuzzleSmokePath = TEXT("/Game/Marau6/Effects/M_MuzzleSmoke.M_Muzzle
 const TCHAR* TracerPath = TEXT("/Game/Marau6/Effects/M_Tracer.M_Tracer");
 const TCHAR* SmokePath = TEXT("/Game/Marau6/Effects/M_ShotSmoke.M_ShotSmoke");
 const TCHAR* PuffPath = TEXT("/Game/Marau6/Effects/M_ImpactPuff.M_ImpactPuff");
+const TCHAR* BloodMistPath = TEXT("/Game/Marau6/Effects/T_BloodMist.T_BloodMist");
+const TCHAR* DropPath = TEXT("/Game/Marau6/Effects/M_BloodDrop.M_BloodDrop");
 const TCHAR* HolePath = TEXT("/Game/Marau6/Effects/M_BulletHole.M_BulletHole");
 const TCHAR* BloodPath = TEXT("/Game/Marau6/Effects/M_BloodDecal.M_BloodDecal");
 
 template<typename T> T* Load(const TCHAR* Path) { return LoadObject<T>(nullptr, Path, nullptr, LOAD_NoWarn | LOAD_Quiet); }
 
-// Flash and smoke textures are 2x2 atlases of variations; the material reads the tile at Frame.
+// Flash, smoke and impact textures are 2x2 atlases of variations; the material reads the tile at Frame.
 FLinearColor RandomFrame()
 {
     const int32 Tile = FMath::RandRange(0, 3);
     return FLinearColor(Tile % 2 * .5f, Tile / 2 * .5f, 0.f, 0.f);
+}
+
+// Decals show one tile of their atlas, picked per decal. A bullet hole is a few
+// centimetres wide, so it must not be culled by screen size like a large decal.
+void ShowRandomTile(UDecalComponent* Decal)
+{
+    if (Decal) Decal->SetFadeScreenSize(0.f);
+    if (UMaterialInstanceDynamic* Look = Decal ? Decal->CreateDynamicMaterialInstance() : nullptr)
+        Look->SetVectorParameterValue(TEXT("Frame"), RandomFrame());
 }
 
 UStaticMeshComponent* MakeCosmeticMesh(AActor* Owner, const TCHAR* Name, UStaticMesh* Mesh, USceneComponent* Parent)
@@ -68,7 +79,6 @@ AMarau6ShotFX::AMarau6ShotFX()
     SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Plane(TEXT("/Engine/BasicShapes/Plane.Plane"));
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Cylinder(TEXT("/Engine/BasicShapes/Cylinder.Cylinder"));
-    static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
 
     // Two crossed blades show the flame from the side and the last, facing down the
     // barrel, shows its star, so the flash reads from any angle.
@@ -95,7 +105,10 @@ AMarau6ShotFX::AMarau6ShotFX()
 
     Tracer = MakeCosmeticMesh(this, TEXT("Tracer"), Cylinder.Object, GetRootComponent());
     Smoke = MakeCosmeticMesh(this, TEXT("Smoke"), Cylinder.Object, GetRootComponent());
-    Puff = MakeCosmeticMesh(this, TEXT("ImpactPuff"), Sphere.Object, GetRootComponent());
+    Puff = CreateDefaultSubobject<UMaterialBillboardComponent>(TEXT("ImpactPuff"));
+    Puff->SetupAttachment(GetRootComponent());
+    Puff->SetCastShadow(false);
+    Puff->SetVisibility(false);
     for (int32 Index = 0; Index < DebrisCount; ++Index)
         Debris.Add(MakeCosmeticMesh(this, *FString::Printf(TEXT("Debris%d"), Index), Cylinder.Object, GetRootComponent()));
     for (int32 Index = 0; Index < MuzzlePuffCount; ++Index)
@@ -190,11 +203,24 @@ void AMarau6ShotFX::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson, co
     ImpactNormal = Normal.IsNearlyZero() ? -TrailDirection : Normal.GetSafeNormal();
     if (bImpact)
     {
+        // A camera-facing sprite of dust, or of blood mist (its own atlas, painted red).
         if (UMaterialInterface* PuffBase = Load<UMaterialInterface>(PuffPath))
         {
-            PuffMaterial = Puff->CreateDynamicMaterialInstance(0, PuffBase);
-            PuffMaterial->SetVectorParameterValue(TEXT("Color"), bBlood ? FLinearColor(.3f, .01f, .01f) : FLinearColor(.45f, .42f, .38f));
-            DropMaterial = UMaterialInstanceDynamic::Create(PuffBase, this);
+            PuffMaterial = UMaterialInstanceDynamic::Create(PuffBase, this);
+            if (UTexture* Mist = bBlood ? Load<UTexture>(BloodMistPath) : nullptr)
+                PuffMaterial->SetTextureParameterValue(TEXT("Puff"), Mist);
+            PuffMaterial->SetVectorParameterValue(TEXT("Color"), bBlood ? FLinearColor(.9f, .9f, .9f) : FLinearColor(.45f, .42f, .38f));
+            PuffMaterial->SetVectorParameterValue(TEXT("Frame"), RandomFrame());
+            PuffMaterial->SetScalarParameterValue(TEXT("Opacity"), 0.f);
+            PuffMaxRadius = bBlood ? 22.f : 30.f;
+            FMaterialSpriteElement Sprite;
+            Sprite.Material = PuffMaterial;
+            Sprite.BaseSizeX = Sprite.BaseSizeY = PuffMaxRadius;
+            Puff->SetElements({ Sprite });
+        }
+        if (UMaterialInterface* DropBase = Load<UMaterialInterface>(DropPath))
+        {
+            DropMaterial = UMaterialInstanceDynamic::Create(DropBase, this);
             DropMaterial->SetVectorParameterValue(TEXT("Color"), FLinearColor(.22f, 0.f, 0.f));
             DropMaterial->SetScalarParameterValue(TEXT("Opacity"), .95f);
         }
@@ -275,7 +301,7 @@ void AMarau6ShotFX::Tick(float DeltaSeconds)
     {
         const float Radius = bBlood ? 5.f + 17.f * FMath::Sqrt(PuffLife) : 6.f + 24.f * FMath::Sqrt(PuffLife);
         Puff->SetWorldLocation(ImpactPoint + ImpactNormal * Radius * .5f + FVector(0.f, 0.f, bBlood ? 0.f : 20.f * ImpactAge));
-        Puff->SetWorldScale3D(FVector(Radius / 50.f));
+        PuffMaterial->SetScalarParameterValue(TEXT("Grow"), Radius / PuffMaxRadius);
         PuffMaterial->SetScalarParameterValue(TEXT("Opacity"), (bBlood ? .85f : .55f) * FMath::Square(1.f - PuffLife));
     }
     const float DebrisSeconds = bBlood ? .5f : .3f;
@@ -300,7 +326,7 @@ void AMarau6ShotFX::SpawnDecals()
             FRotator Facing = (-ImpactNormal).Rotation();
             Facing.Roll = FMath::FRandRange(0.f, 360.f);
             const float Size = FMath::FRandRange(2.f, 3.f);
-            UGameplayStatics::SpawnDecalAtLocation(World, Hole, FVector(4.f, Size, Size), ImpactPoint, Facing, 20.f);
+            ShowRandomTile(UGameplayStatics::SpawnDecalAtLocation(World, Hole, FVector(4.f, Size, Size), ImpactPoint, Facing, 20.f));
         }
         return;
     }
@@ -319,7 +345,7 @@ void AMarau6ShotFX::SpawnDecals()
         FRotator Facing = (-Hit.ImpactNormal).Rotation();
         Facing.Roll = FMath::FRandRange(0.f, 360.f);
         const float Size = FMath::FRandRange(.5f, 1.f) * Probe.Value;
-        UGameplayStatics::SpawnDecalAtLocation(World, Blood, FVector(8.f, Size, Size), Hit.ImpactPoint, Facing, 30.f);
+        ShowRandomTile(UGameplayStatics::SpawnDecalAtLocation(World, Blood, FVector(8.f, Size, Size), Hit.ImpactPoint, Facing, 30.f));
     }
 }
 

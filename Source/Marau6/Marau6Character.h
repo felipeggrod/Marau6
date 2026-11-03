@@ -191,8 +191,7 @@ protected:
     UFUNCTION() void OnRep_ReloadPose();
     void SetReloadPose(bool bValue);
     UPROPERTY() TObjectPtr<UAnimSequence> ReloadAnimation;
-    /** Gear sounds timed to the staged reload: arms, magazine out, magazine in, charge, arms. */
-    UPROPERTY() TObjectPtr<USoundBase> ReloadCloth;
+    /** Recorded reload, cut in three and timed to the staged reload: magazine out, magazine in, charge. */
     UPROPERTY() TObjectPtr<USoundBase> ReloadMagOut;
     UPROPERTY() TObjectPtr<USoundBase> ReloadMagIn;
     UPROPERTY() TObjectPtr<USoundBase> ReloadCharge;
