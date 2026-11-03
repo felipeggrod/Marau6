@@ -45,7 +45,9 @@ void AMarau6PlayerController::BeginPlay()
 {
     Super::BeginPlay();
     if(HasAuthority() && UMarau6Persistence::UsesPersistentBase(GetWorld()))
-    {bUseBase=true;BaseMessage=TEXT("1: Teste 1 | 2: Teste 2");if(auto* P=Cast<AMarau6Character>(GetPawn()))P->SetAtBase(true);}
+    {bUseBase=true;BaseMessage=TEXT("1: Teste 1 | 2: Teste 2");if(auto* P=Cast<AMarau6Character>(GetPawn()))P->SetAtBase(true);
+    // The basic kit is the default loadout; automated tests choose their kit explicitly.
+    if(!GIsAutomationTesting)bBasicKit=true;}
 
 
     if (IsLocalPlayerController())

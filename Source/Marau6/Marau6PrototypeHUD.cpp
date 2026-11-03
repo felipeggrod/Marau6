@@ -84,19 +84,17 @@ void AMarau6PrototypeHUD::DrawHUD()
         float Top = BarTop;
         if (Character->HasEquippedRifle())
         {
-            // Magazine / capacity, red when empty; below it everything carried:
-            // the rifle's reserve plus unopened ammo boxes in the backpack.
-            const FString Ammo = FString::Printf(TEXT("%d / %d"), Character->GetMagazineAmmo(), Character->GetMagazineCapacity());
+            // "magazine / capacity (carried)", red when empty; carried is the rifle's
+            // reserve plus unopened ammo boxes in the backpack.
             int32 Boxes = 0;
             for (int32 Slot = 0; Slot < Marau6Slots::BackpackCount; ++Slot)
                 if (const FMarau6Item* Item = Inventory->ItemAt(Slot)) Boxes += Item->IsAmmo() ? 1 : 0;
             const int32 Carried = Character->GetReserveAmmo() + Boxes * Marau6Ammo::BoxRounds;
-            float W = 0.f, H = 0.f, PW = 0.f, PH = 0.f;
-            const FString Pack = FString::Printf(TEXT("%d"), Carried);
-            GetTextSize(Ammo, W, H, GEngine->GetLargeFont(), 1.6f);GetTextSize(Pack, PW, PH, Medium, 1.f);
-            Top = BarTop - 8.f - PH - H;
-            RightText(Ammo, Right, Top, Character->GetMagazineAmmo() == 0 ? Fault : FLinearColor::White, GEngine->GetLargeFont(), 1.6f);
-            RightText(Pack, Right, Top + H, Carried == 0 ? Fault : FLinearColor(.75f, .78f, .8f), Medium);
+            const FString Ammo = FString::Printf(TEXT("%d / %d (%d)"), Character->GetMagazineAmmo(), Character->GetMagazineCapacity(), Carried);
+            float W = 0.f, H = 0.f;
+            GetTextSize(Ammo, W, H, GEngine->GetLargeFont(), 1.4f);
+            Top = BarTop - 8.f - H;
+            RightText(Ammo, Right, Top, Character->GetMagazineAmmo() == 0 ? Fault : FLinearColor::White, GEngine->GetLargeFont(), 1.4f);
             if (Character->IsReloading())
             {
                 RightText(TEXT("RECARREGANDO"), Right, Top - 18.f, FLinearColor::Yellow, Small);

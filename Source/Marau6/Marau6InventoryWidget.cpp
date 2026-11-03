@@ -215,9 +215,9 @@ TSharedRef<SWidget> UMarau6InventoryWidget::RebuildWidget()
     static const FSlateRoundedBoxBrush PrimaryFill(Marau6UI::Brass(),2.f);
     auto Enter=SNew(SButton).IsFocusable(false).ButtonStyle(&Marau6UI::FlatButton()).ContentPadding(FMargin(0))
         .OnClicked_Lambda([PC]{if(auto* P=PC.Get())P->HandleInventoryKey(EKeys::B);return FReply::Handled();})
-        [SNew(SBorder).BorderImage(&PrimaryFill).Padding(FMargin(22,10))[SNew(SHorizontalBox)
-            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Label(TEXT("B"),Marau6UI::Mono(7.5f),Marau6UI::SRGB(40,32,18))]
-            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(12,0,0,0)[Label(TEXT("ENTRAR"),Marau6UI::Font(TEXT("Medium"),12,80),Marau6UI::SRGB(18,15,10))]]];
+        [SNew(SBorder).BorderImage(&PrimaryFill).Padding(FMargin(64,18))[SNew(SHorizontalBox)
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Label(TEXT("B"),Marau6UI::Mono(11),Marau6UI::SRGB(40,32,18))]
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(20,0,0,0)[Label(TEXT("ENTRAR"),Marau6UI::Font(TEXT("BoldCondensed"),30,120),Marau6UI::SRGB(18,15,10))]]];
     auto BaseLegend=SNew(SHorizontalBox).Visibility_Lambda(BaseOnly)
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,36,0)[HintButton(TEXT("1"),TEXT("PERFIL 1"),EKeys::One)]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,36,0)[HintButton(TEXT("2"),TEXT("PERFIL 2"),EKeys::Two)]

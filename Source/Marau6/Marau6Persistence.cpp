@@ -143,6 +143,13 @@ void UMarau6Persistence::Tick(float Delta)
         auto* Scenery=GetWorld()->GetSubsystem<UMarau6Destruction>();
         if(Scenery && Scenery->IsReadyForRound()){bOpening=false;bRoundAcknowledged=false;bReady=true;CommitLedger();}
     }
+    // Players arrive with a profile already chosen: the first free one (Perfil 1, then 2).
+    // Automated tests pick profiles themselves.
+    if(bReady && !GIsAutomationTesting)
+        for(TActorIterator<AMarau6PlayerController> It(GetWorld());It;++It)
+            if(It->bUseBase && !It->bInRaid && It->BaseProfile==0)
+                for(int32 Number=1;Number<=2;++Number)
+                    if(!Claims.FindRef(Number).IsValid()){SelectProfile(*It,Number);break;}
     Retry-=Delta;
     if(Commands.IsEmpty() && !bSending && !bOpening && bRecovery)
     {bRecovery=false;RaidId.Empty();OpenRound();}
