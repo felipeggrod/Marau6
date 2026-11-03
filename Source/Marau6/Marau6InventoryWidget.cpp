@@ -206,7 +206,7 @@ TSharedRef<SWidget> UMarau6InventoryWidget::RebuildWidget()
         const FString& Status=PC->GetBaseBackendStatus();
         return Status==TEXT("Backend conectado")?Marau6UI::Ready():Status.StartsWith(TEXT("Preparando")) || Status.StartsWith(TEXT("Recuperando"))?Marau6UI::Waiting():Marau6UI::Fault();
     };
-    // Base actions sit in the bottom bar with the legend; ENTRAR is the primary action, rightmost.
+    // Base actions sit in the bottom bar; ENTRAR is the primary action, rightmost.
     auto HintButton=[PC,Hint](const TCHAR* Key,const TCHAR* Action,FKey Bound)
     {
         return SNew(SButton).IsFocusable(false).ButtonStyle(&Marau6UI::FlatButton()).ContentPadding(FMargin(0))
@@ -219,9 +219,6 @@ TSharedRef<SWidget> UMarau6InventoryWidget::RebuildWidget()
             +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[Label(TEXT("B"),Marau6UI::Mono(7.5f),Marau6UI::SRGB(40,32,18))]
             +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(12,0,0,0)[Label(TEXT("ENTRAR"),Marau6UI::Font(TEXT("Medium"),12,80),Marau6UI::SRGB(18,15,10))]]];
     auto BaseLegend=SNew(SHorizontalBox).Visibility_Lambda(BaseOnly)
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,36,0)[Hint(TEXT("CLIQUE"),TEXT("DETALHES"))]
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,36,0)[Hint(TEXT("ARRASTAR"),TEXT("MOVER / TROCAR"))]
-        +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,36,0)[Hint(TEXT("SETAS"),TEXT("SELECIONAR"))]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,36,0)[HintButton(TEXT("1"),TEXT("PERFIL 1"),EKeys::One)]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,36,0)[HintButton(TEXT("2"),TEXT("PERFIL 2"),EKeys::Two)]
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(0,0,28,0)[HintButton(TEXT("N"),TEXT("NOVA RODADA"),EKeys::N)]
