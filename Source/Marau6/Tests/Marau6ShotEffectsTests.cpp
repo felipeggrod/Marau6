@@ -50,17 +50,16 @@ bool FMarau6ShotEffectsTest::RunTest(const FString& Parameters)
     UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
     TestFalse(TEXT("No shot FX part is a sphere"), Meshes.ContainsByPredicate(
         [Sphere](const UStaticMeshComponent* Mesh) { return Mesh->GetStaticMesh() == Sphere; }));
-    auto* Glow = FindObject<UStaticMeshComponent>(FX, TEXT("MuzzleGlow"));
+    // The flash is textured blades only: the crossed side blades, the star, and the
+    // larger second star layer, all on the muzzle.
     auto* Blade = FindObject<UStaticMeshComponent>(FX, TEXT("FlashBlade0"));
-    if (!TestNotNull(TEXT("Muzzle glow layer"), Glow) || !TestNotNull(TEXT("Flash blade"), Blade)) return false;
-    TestTrue(TEXT("Glow rides the flash at the muzzle"), Glow->GetAttachParent() == Blade->GetAttachParent()
-        && Glow->GetAttachParent()->GetAttachSocketName() == FName("Muzzle"));
-    TestTrue(TEXT("Glow shows with the shot (run Marau6.SetupShotFX for M_MuzzleGlow)"), Glow->IsVisible());
-    // This world's controller has no local player, so the shot is drawn as seen by others;
-    // the glow must use whichever first/third person mode the blades use.
-    TestEqual(TEXT("Glow drawn in the same perspective as the blades"),
-        Glow->FirstPersonPrimitiveType, Blade->FirstPersonPrimitiveType);
-    TestEqual(TEXT("Glow no collision"), Glow->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+    auto* Layer = FindObject<UStaticMeshComponent>(FX, TEXT("FlashBlade3"));
+    if (!TestNotNull(TEXT("Flash blade"), Blade) || !TestNotNull(TEXT("Second textured flash layer"), Layer)) return false;
+    TestTrue(TEXT("Second layer rides the flash at the muzzle"), Layer->GetAttachParent() == Blade->GetAttachParent()
+        && Layer->GetAttachParent()->GetAttachSocketName() == FName("Muzzle"));
+    TestEqual(TEXT("Second layer drawn in the same perspective as the blades"),
+        Layer->FirstPersonPrimitiveType, Blade->FirstPersonPrimitiveType);
+    TestNull(TEXT("No procedural glow layer"), FindObject<UStaticMeshComponent>(FX, TEXT("MuzzleGlow")));
     Fire(); TestEqual(TEXT("Cooldown rejection creates no effect"), Effects().Num(), 1);
     ++GFrameCounter; World->Tick(LEVELTICK_TimeOnly, .3f); World->GetTimerManager().Tick(.3f);
     TestEqual(TEXT("Transient effects are cleaned up"), Effects().Num(), 0);

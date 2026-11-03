@@ -375,7 +375,6 @@ void AMarau6Character::AddRecoil()
     RecoilRecovery += RecoilKick.X * Steady * RecoilSettle;
     LastShotTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
     ShotKick = 1.f;
-    KickRoll = FMath::FRandRange(-1.f, 1.f);
 }
 
 void AMarau6Character::StartSprint()
@@ -753,19 +752,17 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
         ReloadArmsPitch = 16.f * FMath::SmoothStep(.06f, .2f, T) * (1.f - FMath::SmoothStep(.78f, .93f, T));
     }
 
-    // Weapon kick: a hard shove back and up with a nod and a small random twist, so
-    // every shot reads as a powerful rifle; aiming halves it.
-    ShotKick = FMath::FInterpTo(ShotKick, 0.f, DeltaSeconds, 14.f);
+    ShotKick = FMath::FInterpTo(ShotKick, 0.f, DeltaSeconds, 18.f);
     const float Kick = ShotKick * (1.f - .5f * AimAlpha);
 
     // The arms only translate in camera space. Rotation goes through the inactive
     // aim camera instead: the first person rig points the rifle along it and keeps
     // both hands on the weapon, so turning it angles the rifle naturally.
     const FVector Offset = FirstPersonArmsOffset + FirstPersonAimOffset * AimAlpha + SprintArmsOffset * SprintAlpha
-        + Bob + ReloadShift + FVector(-6.5f * Kick, SwayRotation.Yaw * .15f, SwayRotation.Pitch * .15f + 1.8f * Kick);
+        + Bob + ReloadShift + FVector(-2.8f * Kick, SwayRotation.Yaw * .15f, SwayRotation.Pitch * .15f);
     FirstPersonMesh->SetRelativeTransform(ArmsNeutral * FTransform(FRotator(ReloadArmsPitch, 0.f, 0.f), Offset));
     ViewModelAim->SetRelativeRotation(SprintAimRotation * SprintAlpha + SwayRotation + BobTurn + ReloadTurn
-        + FRotator(5.f * Kick, 1.2f * KickRoll * Kick, 3.f * KickRoll * Kick));
+        + FRotator(1.9f * Kick, 0.f, 0.f));
 
     FirstPersonCameraComponent->SetFieldOfView(FMath::Lerp(DefaultFieldOfView, DefaultFieldOfView * AimFieldOfViewScale, AimAlpha));
 

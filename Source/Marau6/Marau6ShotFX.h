@@ -12,9 +12,8 @@ class UMaterialBillboardComponent;
 
 /**
  * Cosmetic, client-only presentation of one accepted shot, layered on top of
- * AMarau6ShotEffect (which plays the shot sound): a textured muzzle flash with a
- * wider glow burst, a few muzzle sparks and a light, puffs of muzzle smoke, a
- * tracer and a smoke trail along the server's hit line, and
+ * AMarau6ShotEffect (which plays the shot sound): a textured muzzle flash and light,
+ * puffs of muzzle smoke, a tracer and a smoke trail along the server's hit line, and
  * an impact that is dust, sparks and a bullet hole on surfaces or blood on characters.
  */
 UCLASS()
@@ -38,9 +37,6 @@ private:
     UPROPERTY() TObjectPtr<USceneComponent> FlashRoot;
     UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> FlashPlanes;
     UPROPERTY() TObjectPtr<UPointLightComponent> FlashLight;
-    UPROPERTY() TObjectPtr<UStaticMeshComponent> FlashGlow;
-    UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> FlashGlowMaterial;
-    UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> MuzzleSparks;
     UPROPERTY() TObjectPtr<UStaticMeshComponent> Tracer;
     UPROPERTY() TObjectPtr<UStaticMeshComponent> Smoke;
     UPROPERTY() TObjectPtr<UMaterialBillboardComponent> Puff;
@@ -60,11 +56,6 @@ private:
     TArray<FVector> DebrisVelocity;
     struct FMuzzlePuff { FVector Start, Velocity; float Radius, Seconds; };
     TArray<FMuzzlePuff> MuzzlePuffs;
-    struct FMuzzleSpark { FVector Velocity; float Seconds; };
-    TArray<FMuzzleSpark> Sparks;
-    FVector ShotViewOrigin = FVector::ZeroVector;
-    float GlowIntensity = 0.f;
-    float SparkScale = 1.f;
     float MuzzleSmokeOpacity = 0.f;
     float MuzzleSmokeRise = 0.f;
     float PuffMaxRadius = 1.f;
@@ -75,6 +66,5 @@ private:
     bool bDecals = false;
 
     void SpawnDecals();
-    void FaceGlowToView();
     static void PlaceTube(UStaticMeshComponent* Tube, const FVector& From, const FVector& To, float Radius);
 };

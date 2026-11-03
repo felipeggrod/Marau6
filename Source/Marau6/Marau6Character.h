@@ -171,7 +171,6 @@ protected:
     /** Owner's clock for the staged first person reload; negative when not reloading. */
     double ReloadPoseStart = -1.0;
     float ShotKick = 0.f;
-    float KickRoll = 0.f;
     float RecoilRecovery = 0.f;
     double LastShotTime = -1.0;
     FRotator SwayRotation = FRotator::ZeroRotator;

@@ -5,7 +5,7 @@ Cadência, recuo, corrida, mira, movimento da arma em primeira pessoa e efeitos 
 ## Regras
 
 - Cadência de 450 disparos por minuto (0,133 s), validada pelo servidor.
-- Recuo: cada disparo aceito localmente sobe a mira 1,3° e desvia até ±0,45° para os lados (30% menos mirando); 35% da subida volta sozinha logo depois do tiro (`RecoilSettle`), um tranco e assentamento. A arma em primeira pessoa recua 6,5 cm, sobe 1,8 cm, levanta o cano 5° e torce de leve a cada tiro (metade mirando). O servidor dispara pela rotação de controle replicada, então o recuo move a mira real e o jogador compensa puxando para baixo. Antes de cada disparo o cliente envia os movimentos pendentes (`FlushServerMoves`), para o servidor usar a mira e o estado de corrida atuais.
+- Recuo: cada disparo aceito localmente sobe a mira 1,3° e desvia até ±0,45° para os lados (30% menos mirando); 35% da subida volta sozinha logo depois do tiro (`RecoilSettle`). A arma em primeira pessoa recua 2,8 cm e levanta o cano 1,9° a cada tiro (metade mirando). O servidor dispara pela rotação de controle replicada, então o recuo move a mira real e o jogador compensa puxando para baixo. Antes de cada disparo o cliente envia os movimentos pendentes (`FlushServerMoves`), para o servidor usar a mira e o estado de corrida atuais.
 - Andando: 5 m/s. Shift corre a 1,3× (6,5 m/s) apenas andando para frente e no chão. Não dispara nem mira correndo; o servidor recusa tiros durante a corrida. Correr cancela a mira; recarregar interrompe a corrida. Depois da corrida o disparo volta quando a arma já subiu.
 - Botão direito segurado mira: 0,6× de velocidade (3 m/s), zoom de 20% e sensibilidade do mouse proporcional ao zoom. A mira fica indisponível durante a recarga e com o inventário aberto.
 - `UMarau6MovementComponent` leva os desejos de correr e mirar em cada movimento salvo (flags `FLAG_Custom_0` e `FLAG_Custom_1`), de modo que o servidor aplica a mesma velocidade prevista pelo cliente.
@@ -18,17 +18,15 @@ O corpo em primeira pessoa é o soldado inteiro. Para o dono, as seções de mat
 
 ## Efeitos do disparo
 
-`AMarau6ShotEffect` só toca o som do disparo; tudo o que se vê é de `AMarau6ShotFX`, criado em cada disparo aceito, de jogadores e de bots. (A antiga esfera `M_ShotGlow` no soquete e a esfera de impacto foram removidas.)
+`AMarau6ShotFX` complementa `AMarau6ShotEffect` em cada disparo aceito, de jogadores e de bots:
 
-- Clarão em três lâminas aditivas na boca do cano (0,05 s) e uma luz pontual breve, que só ilumina e não desenha nada.
-- Segunda camada do clarão: um disco aditivo suave (`M_MuzzleGlow`, laranja com núcleo branco, sem textura) de 60 cm, 12 cm à frente do soquete, sempre virado para a câmera; dura 0,035 s com intensidade 6 decaindo `exp(-45 t)`, e 60% disso para o dono. Esmaece onde corta a arma ou uma parede (depth fade de 6 cm). Segue o soquete e, para o dono, é desenhado em primeira pessoa como as lâminas.
-- Cinco faíscas rápidas (tubos com `M_Tracer`) saem da boca num cone estreito a 9-18 m/s e somem em 0,04-0,09 s; para o dono saem da boca desenhada, na escala de primeira pessoa e com metade do brilho.
+- Clarão texturizado na boca do cano: duas lâminas cruzadas, a estrela frontal e uma segunda estrela maior, girada e com outro quadro do atlas, mais uma luz breve. O clarão esférico antigo (`AMarau6ShotEffect`) foi removido.
 - Camada de som do rifle (`S_RifleShot`) sobre o som atual: sem posição para o dono, espacial para os outros.
 - Traçante a 500 m/s e rastro de fumaça que alarga, sobe e some em 1,4 s. Para o dono, o rastro começa na boca do cano desenhada (escala de primeira pessoa).
 - No impacto em superfície: poeira, faíscas e marca de bala por 20 s. Em personagem: névoa e gotas de sangue e manchas na parede atrás e no chão abaixo, só em geometria estática, por 30 s.
 - No impacto, a poeira (ou a névoa de sangue) é um sprite voltado para a câmera que cresce e some, suavizado onde encosta na superfície; as gotas de sangue em voo são tubos (`M_BloodDrop`).
 
-Os materiais (`M_MuzzleFlash`, `M_MuzzleGlow`, `M_MuzzleSmoke`, `M_Tracer`, `M_ShotSmoke`, `M_ImpactPuff`, `M_BloodDrop`, `M_BulletHole`, `M_BloodDecal`) são montados em C++ por `Marau6.SetupShotFX` (`Source/Marau6/Tests/Marau6ShotFXSetup.cpp`). As texturas são atlas 2x2 de variações; cada clarão, fumaça, poeira e decal sorteia um quadro (parâmetro `Frame`):
+Os materiais (`M_MuzzleFlash`, `M_MuzzleSmoke`, `M_Tracer`, `M_ShotSmoke`, `M_ImpactPuff`, `M_BloodDrop`, `M_BulletHole`, `M_BloodDecal`) são montados em C++ por `Marau6.SetupShotFX` (`Source/Marau6/Tests/Marau6ShotFXSetup.cpp`). As texturas são atlas 2x2 de variações; cada clarão, fumaça, poeira e decal sorteia um quadro (parâmetro `Frame`):
 
 - `scripts/Generate-ShotTextures.py`: `T_MuzzleFlash_Side`, `T_MuzzleFlash_Front`, `T_MuzzleSmoke` (512 px).
 - `scripts/Generate-ImpactTextures.py` (1024 px): `T_BloodSplatter` (mancha com gotas satélites e respingos alongados, centro mais escuro e borda úmida; brilho maior onde o sangue é espesso), `T_BloodMist` (névoa com respingos, trocada no `M_ImpactPuff` em acertos em personagem), `T_BulletHole` com o normal map `T_BulletHole_N` (furo, cratera esmagada, borda lascada, rachaduras e fuligem) e `T_ImpactDust` (nuvem de poeira com cascalho).

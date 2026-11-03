@@ -19,6 +19,33 @@
 
 namespace
 {
+/** Vector ammo icon: three brass rounds, each a casing under a rounded tip. */
+class SMarau6RoundsIcon : public SLeafWidget
+{
+public:
+    SLATE_BEGIN_ARGS(SMarau6RoundsIcon){}
+        SLATE_ATTRIBUTE(FLinearColor,Color)
+    SLATE_END_ARGS()
+    void Construct(const FArguments& A){Color=A._Color;SetVisibility(EVisibility::HitTestInvisible);}
+    virtual FVector2D ComputeDesiredSize(float) const override{return FVector2D(20,18);}
+    virtual int32 OnPaint(const FPaintArgs&,const FGeometry& G,const FSlateRect&,FSlateWindowElementList& Out,int32 L,const FWidgetStyle&,bool) const override
+    {
+        static const FSlateRoundedBoxBrush Tip(FLinearColor::White,FVector4(2.5f,2.5f,0.f,0.f));
+        const FVector2D Size=G.GetLocalSize();const float W=4.5f,Gap=2.5f,TipH=Size.Y*.34f,Rim=1.5f;
+        const FLinearColor Ink=Color.Get(Marau6UI::Brass());
+        for(int32 N=0;N<3;N++)
+        {
+            const float X=N*(W+Gap);
+            FSlateDrawElement::MakeBox(Out,L+1,G.ToPaintGeometry(FVector2D(W,TipH),FSlateLayoutTransform(FVector2D(X,0))),&Tip,ESlateDrawEffect::None,Ink*FLinearColor(.85f,.78f,.7f));
+            FSlateDrawElement::MakeBox(Out,L+1,G.ToPaintGeometry(FVector2D(W,Size.Y-TipH-Rim-.5f),FSlateLayoutTransform(FVector2D(X,TipH+.5f))),Marau6UI::White(),ESlateDrawEffect::None,Ink);
+            FSlateDrawElement::MakeBox(Out,L+1,G.ToPaintGeometry(FVector2D(W+1.f,Rim),FSlateLayoutTransform(FVector2D(X-.5f,Size.Y-Rim))),Marau6UI::White(),ESlateDrawEffect::None,Ink*.8f);
+        }
+        return L+1;
+    }
+private:
+    TAttribute<FLinearColor> Color;
+};
+
 /** Segmented gauge: dim empty segments, the filled share in the given color. */
 class SMarau6Meter : public SLeafWidget
 {
@@ -78,25 +105,23 @@ TSharedRef<SWidget> UMarau6HUDWidget::RebuildWidget()
     auto Health=[Char]{const auto* C=Char();return C?FMath::Max(0.f,C->GetHealth()):0.f;};
     // Ammo row, as wide as the health bar under it: icon left, "20 / 20 (60)" right,
     // where the bracket is everything carried (reserve plus boxes in the backpack).
-    static UTexture2D* AmmoIcon=[]{UTexture2D* T=LoadObject<UTexture2D>(nullptr,TEXT("/Game/Marau6/UI/Icons/T_UI_Icon_Ammo.T_UI_Icon_Ammo"));if(T)T->AddToRoot();return T;}();
-    static FSlateBrush AmmoBrush=[]{FSlateBrush B;B.SetResourceObject(AmmoIcon);B.ImageSize=FVector2D(36,36);return B;}();
     auto Ammo=SNew(SVerticalBox).Visibility_Lambda(Shown(Armed))
         +SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)[SNew(SBox).Visibility_Lambda(Shown(Reloading))[Label(TEXT("RECARREGANDO"),Marau6UI::Mono(7),Marau6UI::Waiting())]]
-        +SVerticalBox::Slot().AutoHeight()[SNew(SBox).WidthOverride(280)[SNew(SHorizontalBox)
-            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SBox).WidthOverride(36).HeightOverride(36)[SNew(SImage).Image(&AmmoBrush)]]
+        +SVerticalBox::Slot().AutoHeight()[SNew(SBox).WidthOverride(220)[SNew(SHorizontalBox)
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[SNew(SBox).WidthOverride(20).HeightOverride(18)[SNew(SMarau6RoundsIcon).Color(Marau6UI::Brass())]]
             +SHorizontalBox::Slot().FillWidth(1)
-            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[Live([Char,Armed]{return Armed()?FString::Printf(TEXT("%d"),Char()->GetMagazineAmmo()):FString();},Marau6UI::Font(TEXT("BoldCondensed"),30,20),
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom)[Live([Char,Armed]{return Armed()?FString::Printf(TEXT("%d"),Char()->GetMagazineAmmo()):FString();},Marau6UI::Font(TEXT("BoldCondensed"),20,20),
                 [Char,Armed]{return Armed() && Char()->GetMagazineAmmo()==0?Marau6UI::Fault():Marau6UI::Text();})]
-            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(6,0,0,5)[Live([Char,Armed]{return Armed()?FString::Printf(TEXT("/ %d"),Char()->GetMagazineCapacity()):FString();},Marau6UI::Font(TEXT("BoldCondensed"),18,20),Fixed(Marau6UI::Muted()))]
-            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(10,0,0,6)[Live([Carried]{return FString::Printf(TEXT("(%d)"),Carried());},Marau6UI::Font(TEXT("BoldCondensed"),15,20),[Carried]{return Carried()==0?Marau6UI::Fault():Marau6UI::Muted();})]]];
-    auto HealthBar=SNew(SBox).WidthOverride(280).HeightOverride(30)[SNew(SOverlay)
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(5,0,0,2)[Live([Char,Armed]{return Armed()?FString::Printf(TEXT("/ %d"),Char()->GetMagazineCapacity()):FString();},Marau6UI::Font(TEXT("BoldCondensed"),13,20),Fixed(Marau6UI::Muted()))]
+            +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Bottom).Padding(7,0,0,2)[Live([Carried]{return FString::Printf(TEXT("(%d)"),Carried());},Marau6UI::Font(TEXT("BoldCondensed"),12,20),[Carried]{return Carried()==0?Marau6UI::Fault():Marau6UI::Muted();})]]];
+    auto HealthBar=SNew(SBox).WidthOverride(220).HeightOverride(16)[SNew(SOverlay)
         +SOverlay::Slot()[SNew(SMarau6Meter).Segments(1).Fill_Lambda([Health]{return Health()/100.f;}).Color(Marau6UI::SRGB(178,40,32,.92f))]
-        +SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)[Live([Health]{return FString::Printf(TEXT("%.0f / 100"),FMath::CeilToFloat(Health()));},Marau6UI::Font(TEXT("BoldCondensed"),15,20),Fixed(Marau6UI::Text()))]];
+        +SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)[Live([Health]{return FString::Printf(TEXT("%.0f / 100"),FMath::CeilToFloat(Health()));},Marau6UI::Font(TEXT("BoldCondensed"),10,20),Fixed(Marau6UI::Text()))]];
     auto HealLine=SNew(SBox).Visibility_Lambda(Shown(Healing))[Live([Char,Healing]{return Healing()?FString::Printf(TEXT("CURANDO %.1fs"),Char()->GetHealing()->Remaining()):FString();},Marau6UI::Mono(7),Fixed(Marau6UI::Ready()))];
-    auto Vitals=SNew(SBox).Visibility_Lambda(Shown(Alive))[SNew(SBorder).BorderImage(Marau6UI::Panel()).Padding(FMargin(14,10,14,14))[SNew(SVerticalBox)
+    auto Vitals=SNew(SBox).Visibility_Lambda(Shown(Alive))[SNew(SBorder).BorderImage(Marau6UI::Panel()).Padding(FMargin(10,6,10,8))[SNew(SVerticalBox)
         +SVerticalBox::Slot().AutoHeight()[Ammo]
         +SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right).Padding(0,6,0,0)[HealLine]
-        +SVerticalBox::Slot().AutoHeight().Padding(0,8,0,0)[HealthBar]]];
+        +SVerticalBox::Slot().AutoHeight().Padding(0,4,0,0)[HealthBar]]];
 
     // Extraction countdown, only while inside the zone.
     auto Extracting=[Char]{const auto* C=Char();return C && C->GetRaidState()==EMarau6RaidState::Extracting;};
