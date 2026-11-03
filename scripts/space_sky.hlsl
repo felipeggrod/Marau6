@@ -140,8 +140,7 @@ float3 StarLayer(float3 d, float cells, float occupancy, float sizeRad, float gl
             float mag = pow(k.x, 8.0);
             float sigma = max(pix * 0.6, sizeRad * (0.5 + mag));
             float core = exp(-0.5 * dist * dist / (sigma * sigma));
-            float halo = glow * mag * (0.22 * exp(-dist / (sigma * 5.0))
-                         + 0.05 * sigma * sigma / (dist * dist + sigma * sigma))
+            float halo = glow * mag * mag * 0.25 * sigma * sigma / (dist * dist + sigma * sigma)
                          * smoothstep(cellRad, cellRad * 0.4, dist);
             float twinkle = 1.0 + 0.45 * (0.6 * sin(time * (1.3 + 4.0 * k.y) + 6.2831 * k.z)
                                         + 0.4 * sin(time * (3.1 + 6.0 * k.z) + 6.2831 * k.x));
@@ -176,8 +175,8 @@ float3 Nebula(float3 d, float time, out float body, out float dust)
     float3 w = p * 2.0 + 3.0 * float3(qx, qy, qx - qy);
     body = Fbm(w + drift * 2.0, 5);
     float fil = Ridged(w * 2.3 - drift * 3.0, 3);
-    float region = smoothstep(0.50, 0.72, Fbm(d * 0.9 + float3(11.0, 3.0, 7.0), 2));
-    float gas = smoothstep(0.45, 0.90, body);
+    float region = smoothstep(0.42, 0.68, Fbm(d * 0.9 + float3(11.0, 3.0, 7.0), 2));
+    float gas = smoothstep(0.40, 0.85, body);
     float density = region * (0.75 * gas + 1.1 * pow(fil, 5.0) * smoothstep(0.30, 0.60, body));
     float3 tint = NebulaTint(Fbm(d * 0.7 + float3(-4.0, 8.0, 1.0), 2) * 1.8 - 0.4 + 0.5 * qx);
     float3 hot = lerp(tint, float3(1.0, 0.92, 0.85), 0.35 * gas * gas);
@@ -210,18 +209,36 @@ void RibbonParams(int k, out float angle, out float shift, out float len, out fl
     }
 }
 
-// Four curtains, each a wavy sheet hanging in a horizontal layer of the sky. The ray is
-// marched up through the layer; the sheet glows in its own colour at the lower edge
-// and fades into a second colour at the top, broken into drifting vertical rays.
-float3 Aurora(float3 d, float time, float dither)
+// Signed horizontal distance from p to a curtain's wavy centre line, with the line's unit
+// normal there (the direction the sheet faces) and the position along the curtain.
+float CurtainDist(float2 p, float2 axis, float2 side, float shift, float phase, float time,
+                  out float along, out float2 normal)
+{
+    along = dot(p, axis);
+    float a0 = along * 0.45 + time * 0.07 + phase;
+    float a1 = along * 1.3 - time * 0.13 + phase * 2.0;
+    float a2 = along * 3.7 + time * 0.31;
+    float curve = 0.55 * sin(a0) + 0.25 * sin(a1) + 0.12 * sin(a2);
+    float slope = 0.2475 * cos(a0) + 0.325 * cos(a1) + 0.444 * cos(a2);
+    normal = normalize(side - slope * axis);
+    return dot(p, side) - shift - curve;
+}
+
+// Four curtains, each a thin vertical sheet hanging in a layer of the sky between heights
+// 1 and 2.4. The ray's path through the layer is scanned for the exact point where it
+// crosses each sheet, so the folds stay sharp at any resolution. The sheet glows in its
+// own colour at the lower edge, fades into a second colour at the top, breaks into
+// drifting vertical rays and brightens where the view grazes it. Seen edge-on, the
+// crossings jump between scan steps, so there a soft volumetric glow takes over.
+float3 Aurora(float3 d, float time, float pix)
 {
     float3 acc = float3(0.0, 0.0, 0.0);
     if (d.z < 0.015)
         return acc;
-    float steps = 16.0;
-    float stepLen = 1.4 / steps * length(d.xy) / d.z;
+    float2 base = d.xy / d.z;
+    float planar = max(length(d.xy), 0.0001);
     float width = 0.13;
-    float widthEff = max(width, stepLen * 0.7);
+    float widthEff = max(width, 1.4 / 18.0 * planar / d.z * 0.7);
     for (int k = 0; k < 4; k++)
     {
         float angle;
@@ -234,36 +251,80 @@ float3 Aurora(float3 d, float time, float dither)
         float2 axis = float2(cos(angle), sin(angle));
         float2 side = float2(-axis.y, axis.x);
         float pulse = 0.55 + 0.45 * sin(time * 0.11 + phase * 1.7);
-        for (int i = 0; i < 16; i++)
+        float prevAlong;
+        float2 prevNormal;
+        float prevDist = CurtainDist(base, axis, side, shift, phase, time, prevAlong, prevNormal);
+        float baseAlong = prevAlong;
+        float nearest = abs(prevDist);
+        float nearestT = 0.0;
+        for (int i = 1; i <= 18; i++)
         {
-            float t = (float(i) + dither) / steps;
-            float2 p = d.xy * ((1.0 + 1.4 * t) / d.z);
-            float along = dot(p, axis);
-            float curve = 0.55 * sin(along * 0.45 + time * 0.07 + phase)
-                        + 0.25 * sin(along * 1.3 - time * 0.13 + phase * 2.0)
-                        + 0.08 * sin(along * 3.7 + time * 0.31);
-            float dist = dot(p, side) - shift - curve;
-            float sheet = exp(-dist * dist / (widthEff * widthEff)) * (width / widthEff);
-            if (sheet < 0.002)
-                continue;
-            float rays = Noise1(along * 22.0 + phase * 10.0 + time * 0.35)
-                       * Noise1(along * 6.0 - time * 0.21 + phase);
-            float profile = smoothstep(0.0, 0.08, t) * exp(-t * (4.0 - 2.5 * rays));
-            float wave = 0.6 + 0.4 * sin(along * 1.7 - time * 0.9 + phase);
-            float ends = smoothstep(len, len * 0.4, abs(along));
-            acc += lerp(low, high, smoothstep(0.15, 0.8, t))
-                 * (sheet * profile * (0.3 + 1.4 * rays) * wave * ends * pulse);
+            float t = float(i) / 18.0;
+            float along;
+            float2 normal;
+            float dist = CurtainDist(base * (1.0 + 1.4 * t), axis, side, shift, phase, time,
+                                     along, normal);
+            if (abs(dist) < nearest)
+            {
+                nearest = abs(dist);
+                nearestT = t;
+            }
+            float soft = exp(-dist * dist / (widthEff * widthEff)) * (width / widthEff);
+            if (soft > 0.002)
+            {
+                acc += lerp(low, high, smoothstep(0.1, 0.7, t))
+                     * (0.07 * soft * exp(-t * 3.0) * pulse
+                        * smoothstep(len, len * 0.4, abs(along))
+                        * (0.6 + 0.4 * sin(along * 1.7 - time * 0.9 + phase)));
+            }
+            if (dist * prevDist <= 0.0)
+            {
+                // One secant step on top of the linear guess keeps the crossing height
+                // continuous between scan intervals.
+                float f = saturate(abs(prevDist) / max(abs(prevDist - dist), 0.00001));
+                float midAlong;
+                float2 midNormal;
+                float mid = CurtainDist(base * (1.0 + 1.4 * (float(i) - 1.0 + f) / 18.0),
+                                        axis, side, shift, phase, time, midAlong, midNormal);
+                if (mid * prevDist > 0.0)
+                    f = f + (1.0 - f) * saturate(abs(mid) / max(abs(mid - dist), 0.00001));
+                else
+                    f = f * saturate(abs(prevDist) / max(abs(prevDist - mid), 0.00001));
+                float tc = (float(i) - 1.0 + f) / 18.0;
+                float ac = lerp(prevAlong, along, f);
+                float h = 1.0 + 1.4 * tc;
+                float footprint = pix * h / (d.z * d.z);
+                float r0 = Noise1(ac * 31.0 + phase * 10.0 + time * 0.35);
+                float r1 = Noise1(ac * 9.0 - time * 0.21 + phase);
+                float rays = saturate(1.3 * r0 * r0 + 0.8 * r1 * r1 - 0.25);
+                rays = lerp(0.35, rays, saturate(1.5 - footprint * 40.0));
+                float profile = smoothstep(0.0, 0.05, tc) * exp(-tc * (4.0 - 2.8 * rays));
+                float facing = abs(dot(d.xy, normal)) / planar;
+                float graze = 0.08 / max(abs(dot(d.xy, normal)), 0.18)
+                            * smoothstep(0.05, 0.35, facing);
+                float wave = 0.6 + 0.4 * sin(ac * 1.7 - time * 0.9 + phase);
+                float ends = smoothstep(len, len * 0.4, abs(ac));
+                float edge = 1.0 + 1.5 * exp(-tc * 30.0);
+                acc += lerp(low, high, smoothstep(0.1, 0.7, tc))
+                     * (graze * profile * edge * (0.15 + 1.6 * rays) * wave * ends * pulse);
+            }
+            prevDist = dist;
+            prevAlong = along;
         }
+        float glow = exp(-nearest * nearest * 5.0) * exp(-nearestT * 2.5)
+                   * smoothstep(len * 1.2, len * 0.3, abs(baseAlong));
+        acc += lerp(low, high, 0.35) * (0.05 * glow * pulse);
     }
-    return acc * (smoothstep(0.015, 0.12, d.z) / steps);
+    return acc * smoothstep(0.015, 0.12, d.z);
 }
 
 float3 HorizonGlow(float3 d, float time)
 {
-    float h = exp(-abs(d.z - 0.01) * 9.0);
-    float n = Fbm(float3(d.xy * 3.0, time * 0.01), 3);
+    float h = exp(-abs(d.z - 0.01) * 18.0);
+    float n = Fbm(d * 5.0 + float3(0.0, 0.0, time * 0.01), 4);
     float3 c = lerp(float3(0.45, 0.06, 0.20), float3(0.55, 0.18, 0.04), n);
-    return c * h * (0.25 + 0.9 * n) * 0.3;
+    float patches = saturate((n - 0.35) * 2.5);
+    return c * h * patches * patches * 0.15;
 }
 
 float3 SpaceSky(float3 d, float time, float pix, float auroraGain, float nebulaGain,
@@ -279,13 +340,12 @@ float3 SpaceSky(float3 d, float time, float pix, float auroraGain, float nebulaG
 
     float3 stars = StarLayer(d, 560.0, 0.10 * density, 0.00015, 0.0, 1.0, time, pix, 0) * 0.5
                  + StarLayer(d, 210.0, 0.14 * density, 0.00025, 0.0, 2.0, time, pix, 0) * 0.9
-                 + StarLayer(d, 70.0, 0.16, 0.00045, 1.0, 3.0, time, pix, 1) * 1.6;
+                 + StarLayer(d, 70.0, 0.10, 0.00045, 1.0, 3.0, time, pix, 1) * 1.6;
     float3 milkyWay = float3(0.30, 0.32, 0.42) * band * (0.15 + 0.6 * body) * 0.12;
     float3 col = float3(0.002, 0.003, 0.007) + milkyWay + stars * starGain;
-    col = (col + neb * (0.3 * nebulaGain)) * exp(-dust * 2.5);
+    col = (col + neb * (0.8 * nebulaGain)) * exp(-dust * 2.5);
     col += HorizonGlow(d, time);
 
-    float dither = Hash13(float3(d * 3971.0) + frac(time * 7.31) * 113.0);
-    col += Aurora(d, time, dither) * (4.0 * auroraGain);
+    col += Aurora(d, time, pix) * (1.3 * auroraGain);
     return col;
 }

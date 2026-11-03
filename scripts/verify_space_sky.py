@@ -10,8 +10,11 @@ assert component.get_collision_enabled() == unreal.CollisionEnabled.NO_COLLISION
 assert str(component.get_collision_profile_name()) == 'NoCollision'
 assert not component.get_editor_property('can_ever_affect_navigation'), 'Sky must not affect navigation'
 assert len([a for a in actors if a.get_actor_label() == 'Marau6 Space Sky']) == 1
-texture = unreal.EditorAssetLibrary.load_asset('/Game/Marau6/Sky/T_Marau6_SpaceSky')
-assert texture.blueprint_get_size_x() >= 8192 and texture.blueprint_get_size_y() >= 4096
+sky_material = component.get_material(0)
+assert not unreal.MaterialEditingLibrary.get_used_textures(sky_material), 'Sky must be procedural'
+assert not sky_material.get_editor_property('is_sky'), 'Is Sky hides the sphere without a sky atmosphere'
+assert unreal.MaterialEditingLibrary.get_num_material_expressions(sky_material) >= 7
+assert not [a for a in actors if isinstance(a, unreal.VolumetricCloud)], 'Volumetric cloud still in the map'
 for label, material in (
         ('Marau6 Ochre Planet', 'M_Marau6_OchrePlanet'),
         ('Marau6 Blue Planet', 'M_Marau6_BluePlanet')):
@@ -25,4 +28,9 @@ for label, material in (
     assert plane.get_editor_property('static_mesh').get_path_name().startswith('/Engine/BasicShapes/Plane.')
 assert unreal.SystemLibrary.get_console_variable_int_value('r.Fog') == 0
 assert unreal.SystemLibrary.get_console_variable_int_value('r.SkyAtmosphere') == 0
-unreal.log_warning('SPACE_SKY_VERIFIED: 8K texture, two planet planes, collision, navigation and render settings')
+for name in ('M_Marau6_SpaceSky', 'M_Marau6_OchrePlanet', 'M_Marau6_BluePlanet'):
+    follow = unreal.MaterialEditingLibrary.get_material_property_input_node(
+        unreal.EditorAssetLibrary.load_asset('/Game/Marau6/Sky/' + name),
+        unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+    assert isinstance(follow, unreal.MaterialExpressionCameraPositionWS), name + ' must follow the camera'
+unreal.log_warning('SPACE_SKY_VERIFIED: procedural sky, no clouds, two planet planes, collision, navigation and render settings')
