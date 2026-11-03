@@ -7,6 +7,8 @@
 #include "Marau6InventoryComponent.h"
 #include "Marau6ItemLedger.h"
 #include "Marau6Persistence.h"
+#include "Marau6Audio.h"
+#include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "Engine/LocalPlayer.h"
 #include "Serialization/JsonSerializer.h"
@@ -200,6 +202,8 @@ void AMarau6PlayerController::TickActor(float Delta,ELevelTick Type,FActorTickFu
 void AMarau6PlayerController::EndPlay(EEndPlayReason::Type Reason)
 {
     CancelInventoryDrag();if(InventoryWidget){InventoryWidget->RemoveFromParent();InventoryWidget=nullptr;}
+    // An activated reverb outlives PIE on the editor's audio device unless removed.
+    if(IsLocalPlayerController())UGameplayStatics::DeactivateReverbEffect(this,Marau6Audio::AmbientReverbTag);
     if(IsLocalPlayerController()){bShowMouseCursor=false;bInventoryInputActive=false;if(GetLocalPlayer() && GetLocalPlayer()->ViewportClient)SetInputMode(FInputModeGameOnly());}
     Super::EndPlay(Reason);
 }

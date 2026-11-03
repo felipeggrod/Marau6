@@ -1,4 +1,5 @@
 #include "Marau6ShotEffect.h"
+#include "Marau6Audio.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 #include "Sound/SoundAttenuation.h"
@@ -16,7 +17,7 @@ AMarau6ShotEffect::AMarau6ShotEffect()
     PrimaryActorTick.bCanEverTick = false;
     bReplicates = false;
     static ConstructorHelpers::FObjectFinder<USoundBase> Sound(
-        TEXT("/Game/Weapons/GrenadeLauncher/Audio/FirstPersonTemplateWeaponFire02.FirstPersonTemplateWeaponFire02"));
+        TEXT("/Game/Marau6/Audio/S_Shot_Uzi.S_Shot_Uzi"));
     ShotSound = Sound.Object;
     ShotAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("ShotAttenuation"));
     ShotAttenuation->Attenuation.bAttenuate = true;
@@ -25,6 +26,9 @@ AMarau6ShotEffect::AMarau6ShotEffect()
     ShotAttenuation->Attenuation.AttenuationShape = EAttenuationShape::Sphere;
     ShotAttenuation->Attenuation.AttenuationShapeExtents = FVector(300.f, 0.f, 0.f);
     ShotAttenuation->Attenuation.FalloffDistance = 7700.f;
+    Marau6Audio::ConfigureDistanceSend(ShotAttenuation->Attenuation, .3f, .8f);
+    OwnerShotAttenuation = CreateDefaultSubobject<USoundAttenuation>(TEXT("OwnerShotAttenuation"));
+    Marau6Audio::ConfigureOwnerSend(OwnerShotAttenuation->Attenuation, .3f);
     SetRootComponent(CreateDefaultSubobject<USceneComponent>(TEXT("Root")));
     MuzzleFlash = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MuzzleFlash"));
     Impact = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Impact"));
@@ -48,18 +52,21 @@ void AMarau6ShotEffect::Present(USkeletalMeshComponent* Rifle, bool bFirstPerson
 {
     if (!GetWorld() || GetNetMode() == NM_DedicatedServer) { Destroy(); return; }
     // Fire-and-forget audio outlives this short visual effect. Only the owning
-    // listener gets 2D playback; other clients hear the world-space rifle.
+    // listener gets unpanned playback; other clients hear the world-space rifle.
+    // Both feed the ambient reverb, distant shots more.
     if (ShotSound && Rifle)
     {
+        const float Pitch = FMath::FRandRange(.95f, 1.05f);
         if (bFirstPerson)
         {
-            UGameplayStatics::PlaySound2D(this, ShotSound, .6f, 1.f, 0.f, nullptr, nullptr, false);
+            UGameplayStatics::PlaySoundAtLocation(this, ShotSound, Rifle->GetComponentLocation(),
+                FRotator::ZeroRotator, .85f, Pitch, 0.f, OwnerShotAttenuation);
         }
         else
         {
             UGameplayStatics::PlaySoundAtLocation(this, ShotSound,
                 Rifle->GetSocketLocation(TEXT("Muzzle")), FRotator::ZeroRotator,
-                .6f, 1.f, 0.f, ShotAttenuation);
+                1.f, Pitch, 0.f, ShotAttenuation);
         }
     }
     if (Rifle && Rifle->DoesSocketExist(TEXT("Muzzle")))

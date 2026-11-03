@@ -11,6 +11,7 @@
 
 class UMarau6InventoryComponent;
 class UMarau6HealingComponent;
+class UMarau6Footsteps;
 class UMarau6MovementComponent;
 class UMarau6ItemLedger;
 class AMarau6ExtractionZone;
@@ -193,6 +194,7 @@ protected:
     friend class UMarau6HealingComponent;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6HealingComponent> Healing;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6InventoryComponent> Inventory;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6Footsteps> Footsteps;
     bool bInventoryOpen=false;
     int32 SelectedInventorySlot=0;
     FGuid InventoryMoveSource;

@@ -6,6 +6,7 @@
 #include "Marau6Persistence.h"
 #include "Marau6ItemLedger.h"
 #include "Marau6ShotEffect.h"
+#include "Marau6Footsteps.h"
 #include "AIController.h"
 #include "NavigationSystem.h"
 #include "NavigationPath.h"
@@ -36,6 +37,7 @@ AMarau6Bot::AMarau6Bot()
     Rifle=CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("BotRifle"));Rifle->SetupAttachment(GetMesh(),TEXT("HandGrip_R"));Rifle->SetCollisionEnabled(ECollisionEnabled::NoCollision);Rifle->SetCanEverAffectNavigation(false);
     static ConstructorHelpers::FObjectFinder<USkeletalMesh> Gun(TEXT("/Game/Weapons/Rifle/Meshes/SKM_Rifle.SKM_Rifle"));Rifle->SetSkeletalMesh(Gun.Object);
     Nameplate=CreateDefaultSubobject<UTextRenderComponent>(TEXT("BotLabel"));Nameplate->SetupAttachment(GetRootComponent());Nameplate->SetRelativeLocation(FVector(0,0,125));Nameplate->SetText(FText::FromString(TEXT("BOT")));Nameplate->SetHorizontalAlignment(EHTA_Center);Nameplate->SetWorldSize(20);Nameplate->SetTextRenderColor(FColor::Red);Nameplate->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Footsteps=CreateDefaultSubobject<UMarau6Footsteps>(TEXT("Footsteps"));
     bUseControllerRotationYaw=false;GetCharacterMovement()->bOrientRotationToMovement=true;GetCharacterMovement()->MaxWalkSpeed=250;GetCharacterMovement()->RotationRate=FRotator(0,360,0);
 }
 void AMarau6Bot::BeginPlay()

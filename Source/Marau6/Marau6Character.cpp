@@ -3,6 +3,7 @@
 #include "Marau6Character.h"
 #include "Marau6DestructibleSection.h"
 #include "Marau6HealingComponent.h"
+#include "Marau6Footsteps.h"
 #include "Marau6PlayerController.h"
 #include "Marau6Bot.h"
 #include "GameFramework/GameModeBase.h"
@@ -51,6 +52,7 @@ AMarau6Character::AMarau6Character(const FObjectInitializer& ObjectInitializer)
 	bReplicates = true;
     Inventory=CreateDefaultSubobject<UMarau6InventoryComponent>(TEXT("Inventory"));
     Healing=CreateDefaultSubobject<UMarau6HealingComponent>(TEXT("Healing"));
+    Footsteps=CreateDefaultSubobject<UMarau6Footsteps>(TEXT("Footsteps"));
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
 	

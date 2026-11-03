@@ -11,6 +11,7 @@ class UMarau6Persistence;
 class UMarau6InventoryWidget;
 class UInputMappingContext;
 class UUserWidget;
+class UReverbEffect;
 
 /**
  *  Simple first person Player Controller
@@ -80,6 +81,8 @@ private:
     UPROPERTY(Replicated) bool bBaseBusy=false;
     UPROPERTY(Replicated) FGuid InventoryContext;
     UPROPERTY(Transient) TObjectPtr<UMarau6InventoryWidget> InventoryWidget;
+    /** Local listener only: the map's soft room tail, see Marau6Audio. */
+    UPROPERTY() TObjectPtr<UReverbEffect> AmbientReverb;
     mutable FString CachedInventoryJson;
     mutable TArray<FMarau6Item> CachedBaseItems;
     mutable int32 CachedBaseRevision=0;

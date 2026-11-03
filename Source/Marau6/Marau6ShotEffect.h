@@ -21,6 +21,7 @@ private:
     UPROPERTY() TObjectPtr<UStaticMeshComponent> Impact;
     UPROPERTY() TObjectPtr<USoundBase> ShotSound;
     UPROPERTY() TObjectPtr<USoundAttenuation> ShotAttenuation;
+    UPROPERTY() TObjectPtr<USoundAttenuation> OwnerShotAttenuation;
     FTimerHandle FlashTimer;
     void HideFlash();
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;

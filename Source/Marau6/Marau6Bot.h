@@ -6,6 +6,7 @@ class AMarau6Character;
 class USkeletalMeshComponent;
 class UAnimSequence;
 class UTextRenderComponent;
+class UMarau6Footsteps;
 UENUM()
 enum class EMarau6BotState : uint8 { Patrol, Investigate, Combat, Dead };
 /** Server-only decisions; clients receive movement, health and cosmetic shots. */
@@ -40,6 +41,7 @@ private:
     UPROPERTY() TObjectPtr<UAnimSequence> IdleAnimation;
     UPROPERTY() TObjectPtr<UAnimSequence> WalkAnimation;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UTextRenderComponent> Nameplate;
+    UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6Footsteps> Footsteps;
     bool bWalkingAnimation=false,bResolvingDeath=false;
     TWeakObjectPtr<AMarau6Character> Target;
     FVector Home=FVector::ZeroVector,LastSeen=FVector::ZeroVector;

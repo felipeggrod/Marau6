@@ -3,6 +3,9 @@
 
 #include "Marau6PlayerController.h"
 #include "Marau6Persistence.h"
+#include "Marau6Audio.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/ReverbEffect.h"
 #include "Marau6Character.h"
 #include "Net/UnrealNetwork.h"
 #include "Marau6PrototypeHUD.h"
@@ -18,6 +21,8 @@ AMarau6PlayerController::AMarau6PlayerController()
 {
 	// set the player camera manager class
 	PlayerCameraManagerClass = AMarau6CameraManager::StaticClass();
+    AmbientReverb = CreateDefaultSubobject<UReverbEffect>(TEXT("AmbientReverb"));
+    Marau6Audio::ConfigureAmbientReverb(*AmbientReverb);
 }
 
 void AMarau6PlayerController::BeginPlay()
@@ -30,6 +35,8 @@ void AMarau6PlayerController::BeginPlay()
     if (IsLocalPlayerController())
     {
         ClientSetHUD(AMarau6PrototypeHUD::StaticClass());
+        UGameplayStatics::ActivateReverbEffect(this, AmbientReverb, Marau6Audio::AmbientReverbTag,
+            0.f, Marau6Audio::AmbientReverbVolume, .5f);
     }
 
 	
