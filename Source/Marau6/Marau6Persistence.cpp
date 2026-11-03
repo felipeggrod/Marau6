@@ -217,7 +217,8 @@ void UMarau6Persistence::SelectKit(AMarau6PlayerController* PC,bool bBasic)
 {
     if(!IsValid(PC) || PC->bInRaid)return;
     if(!bReady || bFatal){PC->BaseMessage=TEXT("Backend nao esta pronto. Aguarde; se nao conectar, use Iniciar-Marau6.cmd.");PC->ForceNetUpdate();return;}
-    if(PC->bBaseBusy || bEntering || (PC->BaseProfile!=0 && Entered.Contains(PC->BaseProfile)))
+    // Only this player's own state matters: the kit is read when their entry request is built.
+    if(PC->bBaseBusy || (PC->BaseProfile!=0 && Entered.Contains(PC->BaseProfile)))
     {PC->BaseMessage=TEXT("Aguarde a operacao pendente antes de trocar o kit.");PC->ForceNetUpdate();return;}
     PC->bBasicKit=bBasic;
     PC->BaseMessage=bBasic?TEXT("KIT BASICO: rifle novo 20/40; seu equipamento fica na base."):TEXT("KIT PERSONALIZADO: entra com o equipamento preparado.");
