@@ -58,7 +58,9 @@ void SMarau6InventorySlot::Construct(const FArguments& Args)
                 .Justification_Lambda([this]{return !Item() && Marau6Slots::IsSafe(Slot)?ETextJustify::Left:ETextJustify::Center;})];
         Overlay->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(0,0,0,4)[Label([this]{return CategoryLabel();},Marau6UI::Mono(6),[]{return Marau6UI::BrassText();})];
     }
-    ChildSlot[SNew(SBox).HeightOverride(Args._Height)[SNew(SBorder).BorderImage_Lambda([this]{return SlotBrush();}).Padding(FMargin(1))[Overlay]]];
+    // Basic kit: the preview items fade and a padlock marks the slot as fixed.
+    ChildSlot[SNew(SBox).HeightOverride(Args._Height)[SNew(SBorder).BorderImage_Lambda([this]{return SlotBrush();}).Padding(FMargin(1))
+        .ColorAndOpacity_Lambda([this]{auto* P=PC.Get();return FLinearColor(1,1,1,P && P->IsKitLocked(Slot)?.45f:1.f);})[Overlay]]];
 }
 const FMarau6Item* SMarau6InventorySlot::Item() const
 {auto* P=PC.Get();return P?P->InventoryUIItemAt(Slot):nullptr;}
@@ -140,6 +142,16 @@ int32 SMarau6InventorySlot::OnPaint(const FPaintArgs& Args,const FGeometry& Geom
     {
         const float X=Size.X-122.f+N*17.f;TArray<FVector2D> Bar;Bar.Add(FVector2D(X,22.f));Bar.Add(FVector2D(X,N%2?50.f:42.f));
         FSlateDrawElement::MakeLines(Out,Painted+1,Geometry.ToPaintGeometry(),Bar,ESlateDrawEffect::None,Marau6UI::Muted(),true,2.f);
+    }
+    if(auto* P=PC.Get();P && P->IsKitLocked(Slot))
+    {
+        // Padlock, top right: a 12x9 body under a rounded shackle.
+        const FVector2D Origin(Size.X-24.f,8.f);const FLinearColor Ink=Marau6UI::Brass();
+        TArray<FVector2D> Body={Origin+FVector2D(0,8),Origin+FVector2D(14,8),Origin+FVector2D(14,18),Origin+FVector2D(0,18),Origin+FVector2D(0,8)};
+        FSlateDrawElement::MakeLines(Out,Painted+1,Geometry.ToPaintGeometry(),Body,ESlateDrawEffect::None,Ink,true,1.5f);
+        TArray<FVector2D> Shackle;
+        for(int32 N=0;N<=8;N++){const float A=PI*N/8.f;Shackle.Add(Origin+FVector2D(7.f-4.5f*FMath::Cos(A),8.f-6.f*FMath::Sin(A)));}
+        FSlateDrawElement::MakeLines(Out,Painted+1,Geometry.ToPaintGeometry(),Shackle,ESlateDrawEffect::None,Ink,true,1.5f);
     }
     if(!IsBlockedDestination())return Painted+1;
     const float Inset=5.f;

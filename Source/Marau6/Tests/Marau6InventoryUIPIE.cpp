@@ -141,7 +141,6 @@ public:
             if(Render && !bHUDShot)
             {
                 if(!Local[0]->HasHUDWidget() || Now-At<1.5)return false;bHUDShot=true;
-                CA->HotbarKey(0);D->Test->TestEqual(TEXT("First hotbar press arms the slot"),CA->GetHotbarArmedSlot(),0);
                 Local[0]->GetHUDWidget()->TakeWidget()->SlatePrepass();
                 TArray<FColor> Pixels;FIntVector Size;auto Window=FSlateApplication::Get().FindWidgetWindow(Local[0]->GetHUDWidget()->TakeWidget());
                 const bool Captured=Window.IsValid() && FSlateApplication::Get().TakeScreenshot(Window.ToSharedRef(),Pixels,Size);
@@ -150,7 +149,8 @@ public:
             }
             const FMarau6Item* Kit=B->GetInventory()->ItemAt(10);
             D->Test->TestTrue(TEXT("Basic kit enters with a new 20/40 rifle"),Kit->Id!=OwnRifle2 && Kit->Magazine==20 && Kit->Reserve==40 && Kit->Durability==10000);
-            D->Test->TestTrue(TEXT("Basic kit leaves the backpack empty"),!B->GetInventory()->ItemAt(0));
+            const FMarau6Item* Box1=B->GetInventory()->ItemAt(0);const FMarau6Item* Box2=B->GetInventory()->ItemAt(1);const FMarau6Item* Medkit=B->GetInventory()->ItemAt(2);
+            D->Test->TestTrue(TEXT("Basic kit carries two ammo boxes and a medkit"),Box1 && Box1->IsAmmo() && Box2 && Box2->IsAmmo() && Medkit && Medkit->Kind==EMarau6ItemKind::Supply);
             D->Test->TestFalse(TEXT("Entry restores mouse capture"),Local[0]->bShowMouseCursor);D->Test->TestFalse(TEXT("Entry does not open stale result UI"),CA->IsInventoryOpen());
             Local[0]->ServerInventoryMoveUI(OldBase);CA->ToggleInventoryFromUI();Local[0]->UpdateInventoryUI();Next();return false;
         }
@@ -226,7 +226,9 @@ public:
         if(Phase==11)
         {
             if(Remote[0]->IsInRaid() || Remote[1]->IsInRaid() || !Bridge->IsSettled() || !Local[0]->InventoryUIItemAt(10) || !Local[1]->InventoryUIItemAt(10))return false;
-            D->Test->TestEqual(TEXT("Basic kit death keeps the base rifle"),Local[1]->InventoryUIItemAt(10)->Id,OwnRifle2);
+            // Still on the basic kit: the panel shows the locked kit preview, the profile keeps its own rifle.
+            D->Test->TestTrue(TEXT("Basic kit death keeps the base rifle"),Local[1]->GetBaseJson().Contains(OwnRifle2.ToString(EGuidFormats::DigitsWithHyphensLower)));
+            D->Test->TestTrue(TEXT("Basic kit equipment stays locked at the base"),Local[1]->IsKitLocked(10) && Local[1]->InventoryUIItemAt(10)->Id!=OwnRifle2);
             D->Test->TestEqual(TEXT("Extracted rifle reserve retains box rounds"),Local[0]->InventoryUIItemAt(10)->Reserve,60);D->Test->TestEqual(TEXT("Extracted rifle in base retains identity"),Local[0]->InventoryUIItemAt(10)->Id,Rifle);Local[0]->ServerNextRound();Next();return false;
         }
         if(Phase==12)

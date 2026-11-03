@@ -229,6 +229,7 @@ void UMarau6Persistence::MoveBase(AMarau6PlayerController* PC,int32 Source,int32
     auto Reject=[&](const FString& Why){if(IsValid(PC)){PC->BaseMessage=Why;PC->ForceNetUpdate();}if(Done)Done(false,Why);};
     if(!bReady || bFatal || !IsValid(PC) || PC->bInRaid || PC->BaseJson.IsEmpty()){Reject(TEXT("Inventario indisponivel neste estado."));return;}
     if(PC->bBaseBusy || bEntering){Reject(TEXT("Aguarde a transferencia pendente."));return;}
+    if(PC->bBasicKit && (Source<100 || Destination<100)){Reject(TEXT("Kit basico bloqueado. Troque para o kit personalizado para editar."));return;}
     auto State=Parse(PC->BaseJson);if(!State){Reject(TEXT("Aguarde atualizar a base."));return;}
     const TArray<TSharedPtr<FJsonValue>>* Items;if(!State->TryGetArrayField(TEXT("items"),Items)){Reject(TEXT("Aguarde atualizar a base."));return;}
     FString Id;for(const auto& V:*Items)if(V->AsObject()->GetIntegerField(TEXT("slot"))==Source)Id=V->AsObject()->GetStringField(TEXT("id"));

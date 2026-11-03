@@ -160,7 +160,7 @@ TSharedRef<SWidget> UMarau6InventoryWidget::RebuildWidget()
                     .ColorAndOpacity_Lambda([Active]{return FSlateColor(Active()?Marau6UI::Brass():FLinearColor::Transparent);})]]];
     };
     auto Kits=SNew(SHorizontalBox).Visibility_Lambda(BaseOnly)
-        +SHorizontalBox::Slot().AutoWidth()[KitTab(TEXT("KIT BÁSICO"),TEXT("RIFLE NOVO 20/40 · EQUIPAMENTO FICA NA BASE"),true)]
+        +SHorizontalBox::Slot().AutoWidth()[KitTab(TEXT("KIT BÁSICO"),TEXT("RIFLE 20/40 · 2 MUNIÇÕES · 1 KIT MÉDICO"),true)]
         +SHorizontalBox::Slot().AutoWidth()[KitTab(TEXT("KIT PERSONALIZADO"),TEXT("ENTRA COM O EQUIPAMENTO ABAIXO"),false)]
         +SHorizontalBox::Slot().FillWidth(1)
         +SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[KeyButton(TEXT("K"),TEXT("TROCAR KIT"),EKeys::K)];

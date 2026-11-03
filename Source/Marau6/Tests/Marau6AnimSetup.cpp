@@ -18,6 +18,8 @@
 #include "UObject/SavePackage.h"
 #include "UObject/UnrealType.h"
 #include "Templates/Function.h"
+#include "K2Node_VariableGet.h"
+#include "EdGraphSchema_K2.h"
 #include "Containers/Ticker.h"
 #include "EngineUtils.h"
 #include "Engine/World.h"
@@ -31,6 +33,7 @@ const TCHAR* TemplateLocomotion = TEXT("/Game/Characters/Mannequins/Anims/Unarme
 const TCHAR* Folder = TEXT("/Game/Marau6/Anims");
 const TCHAR* LocomotionName = TEXT("BS_Marau6_Locomotion");
 const TCHAR* BodyPose = TEXT("/Game/Marau6/Anims/ABP_Marau6_TP_Rifle.ABP_Marau6_TP_Rifle");
+const TCHAR* Arms = TEXT("/Game/Marau6/Anims/ABP_Marau6_FP_Rifle.ABP_Marau6_FP_Rifle");
 // Players move at 5 m/s: the template only reaches its jog at 6 m/s, so normal
 // movement read as a fast walk. Jog now lands on the move speed; aiming (3 m/s) still walks.
 constexpr double JogSpeed = 500.0;
@@ -196,10 +199,50 @@ static bool AdaptBody(UBlendSpace* Space)
     return bSaved && Slots == 1;
 }
 
+/** First person: a RigAlpha variable drives the hand rig's alpha, so the reload can release the hands. */
+static bool AdaptArms()
+{
+    UAnimBlueprint* Blueprint = LoadObject<UAnimBlueprint>(nullptr, Arms);
+    if (!Blueprint) return false;
+    const FName Variable(AMarau6Character::RigAlphaVariable);
+    if (FBlueprintEditorUtils::FindNewVariableIndex(Blueprint, Variable) == INDEX_NONE)
+    {
+        FEdGraphPinType Type(UEdGraphSchema_K2::PC_Real, UEdGraphSchema_K2::PC_Float, nullptr, EPinContainerType::None, false, FEdGraphTerminalType());
+        if (!FBlueprintEditorUtils::AddMemberVariable(Blueprint, Variable, Type, TEXT("1.0"))) return false;
+    }
+    TArray<UEdGraph*> Graphs;
+    Blueprint->GetAllGraphs(Graphs);
+    int32 Wired = 0;
+    for (UEdGraph* Graph : Graphs)
+        for (UEdGraphNode* Node : TArray<UEdGraphNode*>(Graph->Nodes))
+        {
+            if (Node->GetClass()->GetFName() != TEXT("AnimGraphNode_ControlRig")) continue;
+            UEdGraphPin* Alpha = Node->FindPin(TEXT("Alpha"));
+            if (!Alpha) { UE_LOG(LogTemp, Error, TEXT("MARAU6_ANIM rig has no Alpha pin")); continue; }
+            if (Alpha->LinkedTo.Num() == 1)
+                if (auto* Get = Cast<UK2Node_VariableGet>(Alpha->LinkedTo[0]->GetOwningNode()); Get && Get->GetVarName() == Variable) { ++Wired; continue; }
+            Alpha->BreakAllPinLinks();
+            UK2Node_VariableGet* Get = NewObject<UK2Node_VariableGet>(Graph);
+            Get->VariableReference.SetSelfMember(Variable);
+            Get->CreateNewGuid();
+            Get->NodePosX = Node->NodePosX - 240;
+            Get->NodePosY = Node->NodePosY + 120;
+            Graph->AddNode(Get, false, false);
+            Get->AllocateDefaultPins();
+            if (!Graph->GetSchema()->TryCreateConnection(Get->GetValuePin(), Alpha)) { UE_LOG(LogTemp, Error, TEXT("MARAU6_ANIM rig alpha wiring failed")); return false; }
+            ++Wired;
+        }
+    FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+    FKismetEditorUtilities::CompileBlueprint(Blueprint);
+    const bool bSaved = Blueprint->Status != BS_Error && Save(Blueprint);
+    UE_LOG(LogTemp, Display, TEXT("MARAU6_ANIM arms saved=%d rig alpha wired=%d"), bSaved, Wired);
+    return bSaved && Wired > 0;
+}
+
 static void Setup()
 {
     UBlendSpace* Space = Locomotion();
-    if (!Space || !AdaptBody(Space))
+    if (!Space || !AdaptBody(Space) || !AdaptArms())
         UE_LOG(LogTemp, Error, TEXT("MARAU6_ANIM setup failed; template assets remain unchanged."));
 }
 // Inspection aids for Marau6.CaptureViewModel shot lists (docs/recarga-locomocao.md).

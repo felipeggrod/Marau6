@@ -4,15 +4,23 @@ Pedido em 03/11/2026.
 
 ## Kit básico e kit personalizado
 
-Na base, acima do equipamento, as abas KIT BÁSICO e KIT PERSONALIZADO (clique ou K) escolhem como entrar na próxima partida. Personalizado é o fluxo anterior: entra com o equipamento preparado. Básico entra com um rifle novo (20/40, 100%) criado pelo backend em `/raids/enter` (`"kit":"basic"`); o equipamento do perfil fica na base. Ao extrair, o que voltar ocupa o próprio slot se estiver livre, senão o primeiro slot livre do stash. Não há mais rifle gratuito ao entrar desarmado no kit personalizado.
+Na base, acima do equipamento, as abas KIT BÁSICO e KIT PERSONALIZADO (clique ou K) escolhem como entrar na próxima partida. Personalizado é o fluxo anterior: entra com o equipamento preparado. Básico entra com um kit novo criado pelo backend em `/raids/enter` (`"kit":"basic"`): rifle 20/40 a 100%, duas caixas de munição e um kit médico. Com o kit básico selecionado, a coluna de equipamento mostra esse kit esmaecido e com cadeado, e não aceita arrastar para dentro nem para fora (cliente e servidor recusam); o stash continua editável. O equipamento personalizado não é apagado: volta a aparecer ao trocar para KIT PERSONALIZADO. Ao extrair, o que voltar ocupa o próprio slot se estiver livre, senão o primeiro slot livre do stash. Não há mais rifle gratuito ao entrar desarmado no kit personalizado.
 
 ## Contador de munição
 
 Canto inferior direito: `carregador / capacidade` (ex.: 12 / 20), vermelho com carregador vazio; abaixo, menor, toda a munição carregada (reserva do rifle + caixas de 20 na mochila). "RECARREGANDO" aparece acima durante a recarga.
 
+## Recarga direto da mochila
+
+R abre as caixas de munição da mochila (e do safe pocket) direto na reserva, 20 balas por caixa, até cobrir o que falta no carregador, e então recarrega. Usa o mesmo caminho durável de arrastar a caixa sobre o rifle, então o backend continua validando 20 balas por caixa consumida. Arrastar continua funcionando.
+
+## Sons da recarga
+
+Tocam no ritmo da recarga encenada (frações dos 2 s): braços (0), carregador saindo (0,24), carregador entrando (0,53), ferrolho (0,70), braços (0,84). Para o dono sem posição; para os outros nos pés do personagem, com a mesma atenuação dos passos. Recarga cancelada interrompe os sons pendentes.
+
 ## Animações
 
-- Primeira pessoa: os braços não tocam clipes; `UpdateViewModel` os move em código e o control rig prende as duas mãos no rifle. Por isso a corrida em primeira pessoa é um balanço no ritmo dos passos (1,6 m por passo a 5 m/s), com rolagem e mergulho do rifle, e a recarga é encenada no view model: inclina e desce, tira o carregador, coloca, puxa o ferrolho e sobe, nos 2 s da recarga.
+- Primeira pessoa: os braços não tocam clipes; `UpdateViewModel` os move em código e o control rig prende as duas mãos no rifle. Por isso a corrida em primeira pessoa é um balanço no ritmo dos passos (1,6 m por passo a 5 m/s), com rolagem e mergulho do rifle (andando, 30% menor que a primeira versão; correndo com Shift, igual), e a recarga é encenada no view model: inclina e desce, tira o carregador, coloca, puxa o ferrolho e sobe, nos 2 s da recarga.
 - Terceira pessoa, corrida: `BS_Marau6_Locomotion` é uma cópia de `BS_Idle_Walk_Run` com o jog em 5 m/s (o template só chegava ao jog em 6 m/s; a 5 m/s parecia caminhada). Mirando (3 m/s) ainda caminha; a corrida com Shift continua no jog.
 - Terceira pessoa, recarga: `MM_Rifle_Reload` toca no ramo superior do corpo (`DefaultSlot`), acelerada para caber nos 2 s; as pernas continuam a locomoção. `bReloadPose` replica para todos, pois o estado de munição só vai ao dono. A primeira pessoa copia a pose do corpo, então a mesma montagem aparece nas duas visões. O carregador do lasgun não se move.
 

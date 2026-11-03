@@ -22,6 +22,7 @@ class UInputAction;
 class UAnimInstance;
 class UInputMappingContext;
 class UAnimSequence;
+class USoundBase;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -190,6 +191,12 @@ protected:
     UFUNCTION() void OnRep_ReloadPose();
     void SetReloadPose(bool bValue);
     UPROPERTY() TObjectPtr<UAnimSequence> ReloadAnimation;
+    /** Gear sounds timed to the staged reload: arms, magazine out, magazine in, charge, arms. */
+    UPROPERTY() TObjectPtr<USoundBase> ReloadCloth;
+    UPROPERTY() TObjectPtr<USoundBase> ReloadMagOut;
+    UPROPERTY() TObjectPtr<USoundBase> ReloadMagIn;
+    UPROPERTY() TObjectPtr<USoundBase> ReloadCharge;
+    TArray<FTimerHandle> ReloadSoundTimers;
 
     UFUNCTION(Server, Unreliable)
     void ServerFire();
@@ -206,9 +213,6 @@ protected:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UMarau6Footsteps> Footsteps;
     bool bInventoryOpen=false;
     int32 SelectedInventorySlot=0;
-    int32 HotbarArmed=INDEX_NONE;
-    FString HotbarNotice;
-    double HotbarNoticeAt=-100;
     FGuid InventoryMoveSource;
     void ToggleInventory();
     void NextInventorySlot();
@@ -269,10 +273,6 @@ public:
     void SelectInventorySlot(int32 Slot) { if(Slot>=0 && Slot<11)SelectedInventorySlot=Slot; }
     void CancelInventorySelection() { InventoryMoveSource.Invalidate(); }
     void ToggleInventoryFromUI() { ToggleInventory(); }
-    /** Hotbar keys 1-8: the first press arms a backpack slot, a second press uses its item. */
-    void HotbarKey(int32 Slot);
-    int32 GetHotbarArmedSlot() const { return !bInventoryOpen && HotbarArmed==SelectedInventorySlot?HotbarArmed:INDEX_NONE; }
-    FString GetHotbarNotice() const;
     void InventoryShortcut(FKey Key);
     void CloseInventoryFromUI() { bInventoryOpen=false;InventoryMoveSource.Invalidate(); }
     void RequestInventoryMove(FGuid Id,int32 Destination);
@@ -313,6 +313,8 @@ public:
 
     /** Montage slot added to the body pose's upper branch by Marau6.SetupLocomotion. */
     static inline const FName ReloadSlot = TEXT("DefaultSlot");
+    /** First person pose variable (added by Marau6.SetupLocomotion) blending the hand rig in and out. */
+    static constexpr const TCHAR* RigAlphaVariable = TEXT("RigAlpha");
 
     virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
         AController* EventInstigator, AActor* DamageCauser) override;

@@ -17,6 +17,8 @@ public:
     static constexpr float MinSpeed = 50.f;
     static constexpr float LandSpeed = 400.f;
     static constexpr float JumpPitch = 1.3f;
+    /** Body and gear sounds from the same place as the steps: unpanned for the owner, at the feet for others. */
+    void PlayGear(USoundBase* Sound, float Volume) const { Play(Sound, Volume, FMath::FRandRange(.97f, 1.03f)); }
 protected:
     virtual void BeginPlay() override;
     virtual void TickComponent(float Delta, ELevelTick TickType, FActorComponentTickFunction* ThisTick) override;

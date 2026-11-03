@@ -18,8 +18,8 @@ public static class RaidService
         Require(!s.Raids.Any(x => !x.Closed && x.Participants.Any(y => y.Profile == c.Profile && y.Outcome == "active")), "Perfil já está em uma partida");
         Require(c.Kit is null or "custom" or "basic", "Kit inválido");
         var basic = c.Kit == "basic";
-        // BASIC kit: the profile keeps its gear; a fresh rifle is minted as reserved equipment.
-        var equipment = basic ? [new Item { Id = Guid.NewGuid(), Kind = 0, Slot = 10, Magazine = 20, Reserve = 40, Durability = 10000, Owner = p.Id.ToString() }] : p.Items.Where(x => x.Slot < 100).ToList();
+        // BASIC kit: the profile keeps its gear; rifle, two ammo boxes and a medkit are minted as reserved equipment.
+        var equipment = basic ? BasicKit(p) : p.Items.Where(x => x.Slot < 100).ToList();
         foreach (var i in equipment) { p.Items.Remove(i); var live=i.Copy(); live.Custody="inventory"; r.Items.Add(live); }
         r.Participants.Add(new Participation { Profile = c.Profile, Kit = basic ? "basic" : "custom" }); p.Revision++;
         return new { profile = p, items = equipment };
@@ -104,6 +104,13 @@ public static class RaidService
         }
         r.Closed = true; return r;
     }
+    static List<Item> BasicKit(Profile p) =>
+    [
+        new Item { Id = Guid.NewGuid(), Kind = 0, Slot = 10, Magazine = 20, Reserve = 40, Durability = 10000, Owner = p.Id.ToString() },
+        new Item { Id = Guid.NewGuid(), Kind = 3, Slot = 0, Owner = p.Id.ToString() },
+        new Item { Id = Guid.NewGuid(), Kind = 3, Slot = 1, Owner = p.Id.ToString() },
+        new Item { Id = Guid.NewGuid(), Kind = 1, Slot = 2, Owner = p.Id.ToString() },
+    ];
     // A BASIC participant still owns its base gear: a colliding slot moves to the first free stash slot,
     // and with a full stash the item is lost (never throw on a raid path; the unique slot index would 503).
     static void Return(Profile p, Item i, bool remap)

@@ -64,5 +64,3 @@ FMarau6ItemInspection FMarau6InventoryUIModel::Inspect(const FMarau6Item* I,int3
     }
     return R;
 }
-FString FMarau6InventoryUIModel::HotbarAction(const FMarau6Item& I)
-{return I.IsRifle()?TEXT("EQUIPAR RIFLE"):I.IsAmmo()?TEXT("ABASTECER O RIFLE"):I.Kind==EMarau6ItemKind::Supply?TEXT("USAR SUPRIMENTO"):FString();}

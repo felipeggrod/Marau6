@@ -4,7 +4,7 @@ O tiro usa `/Game/Marau6/Audio/S_RifleFire` como único som (0,86s, -21 LUFS), c
 
 `ffmpeg -i rifle_fire_sfx.mp3 -ac 1 -ar 44100 -c:a pcm_s16le Saved/SourceAudio/S_RifleFire.wav`, depois `Marau6.SetupShotFX` com o editor fechado.
 
-Substituiu em 02/11/2026 as duas camadas anteriores (Uzi `S_Shot_Uzi` e `S_RifleShot` sintetizado em `AMarau6ShotFX`), que não tocam mais. Volume 0,88 dono / 1,05 outros, no nível da antiga dupla.
+Substituiu em 02/11/2026 as duas camadas anteriores (Uzi `S_Shot_Uzi` e `S_RifleShot` sintetizado em `AMarau6ShotFX`), que não tocam mais. Volume 1,8 dono / 2,1 outros (cerca de +6 dB sobre o nível da antiga dupla, a pedido: o tiro deve dominar); passos subiram para 0,8 / 1,4 para não sumirem.
 
 AMarau6ShotEffect::Present toca uma única alternativa de áudio: PlaySound2D para o dono (volume 0,85, não marcado como som de interface), ou PlaySoundAtLocation na boca do rifle em terceira pessoa para outros clientes (volume 1). Pitch aleatório 0,95–1,05 a cada tiro, como no TogetherWEB. Atenuação linear esférica: volume estável nos primeiros3m e queda até silêncio em80m. Esses valores são provisórios. Não há oclusão por paredes nesta etapa.
 
@@ -37,3 +37,20 @@ Todos os sons alimentam esse reverb. Os do próprio jogador (tiro, passos, pulo,
 ## Descompressão na entrada da partida (03/11/2026)
 
 `S_Decompression` é um jato de gás sintetizado ("pfvvshhhh": estalo da vedação, sopro grave que sobe para um chiado agudo, cauda de ~2,4s), gerado por `scripts/Generate-Decompression.py` em `Saved/SourceAudio` e importado por `Marau6.SetupShotFX`. Toca só para o jogador local, quando `bInRaid` passa a verdadeiro (entrada na partida pela base; B). Não toca ao iniciar o jogo nem ao voltar para a base. Volume 0,5, pitch 1,15, sem espacialização, com envio 0,3 ao reverb (`Marau6Audio::GasVolume`/`GasPitch`). Mapas sem base persistente não têm entrada na partida e, portanto, não tocam o som.
+
+## Recarga (02/11/2026)
+
+Quatro sons curtos sintetizados para a recarga do rifle, mono 16-bit 44,1kHz, pico -1 dBFS e cerca de -19 LUFS (perto dos passos, bem abaixo do tiro), em `/Game/Marau6/Audio`:
+
+- `S_Reload_Cloth` (0,35s, -18,9 LUFS): manga e equipamento se mexendo junto com os braços — sopro de ruído filtrado, estalinhos de tecido, rangido leve de couro e toque de fivela.
+- `S_Reload_MagOut` (0,40s, -19,6 LUFS): clique do botão de liberação, batida surda do carregador soltando e o metal deslizando para fora com raspagem, terminando num tique ao sair do poço.
+- `S_Reload_MagIn` (0,40s, -19,2 LUFS): carregador novo subindo com raspagem crescente e "clack" metálico firme ao travar (estalo, baque grave e parciais de aço), com a trava fechando logo depois.
+- `S_Reload_Charge` (0,45s, -19,1 LUFS): alavanca de manejo puxada (deslize com catraca de cliques que se espaçam), batente traseiro e retorno com estalo seco e corpo metálico.
+
+Gerados por `scripts/Generate-ReloadSounds.py` (semente fixa, numpy + scipy, um fluxo aleatório por som; cada um com drive de saturação próprio e normalizado a -1 dBFS) e importados com o commandlet ImportAssets (JSON com caminhos absolutos, `DestinationPath` `/Game/Marau6/Audio`, `bReplaceExisting` verdadeiro; o erro "Invalid Destination Path ()" de um grupo vazio extra é inofensivo):
+
+`python -I scripts/Generate-ReloadSounds.py Saved/SourceAudio`
+
+`"D:\Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" "D:\UnityProjects\marau6\Marau6.uproject" -run=ImportAssets -importsettings=<json> -nosourcecontrol -unattended -nopause -stdout`
+
+Medição: `ffmpeg -i f.wav -af "apad=pad_dur=1,ebur128=peak=true" -f null -` (o preenchimento com silêncio é necessário porque o ebur128 integra em blocos de 400ms) e `volumedetect`. Sem verificação auditiva até aqui; ligação aos eventos da recarga fica no código C++.

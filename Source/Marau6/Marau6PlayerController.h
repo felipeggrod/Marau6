@@ -37,6 +37,8 @@ public:
     /** Base choice for the next raid: BASIC KIT (a fresh rifle, own gear stays home) or CUSTOM KIT. */
     bool IsBasicKit() const { return bBasicKit; }
     void SelectKit(bool bBasic);
+    /** Equipment slots show the fixed basic kit and cannot be edited; the custom loadout stays saved. */
+    bool IsKitLocked(int32 Slot) const { return IsInventoryAtBase() && bBasicKit && Slot>=0 && Slot<100; }
     bool IsInRaid() const { return bInRaid; }
     const FString& GetBaseJson() const { return BaseJson; }
     const FString& GetBaseMessage() const { return BaseMessage; }
@@ -101,6 +103,8 @@ private:
     void UpdateRaidGas();
     mutable FString CachedInventoryJson;
     mutable TArray<FMarau6Item> CachedBaseItems;
+    /** Base view with the basic kit selected: the stash plus the kit preview in the equipment slots. */
+    mutable TArray<FMarau6Item> CachedKitItems;
     mutable int32 CachedBaseRevision=0;
     FString InventoryContextKey,InventoryMessage,InventoryCompletionMessage,ObservedBaseMessage;
     FGuid LastInventoryContext,PendingInventoryRequest,PendingInventoryContext,ServerInventoryRequest;

@@ -4,6 +4,9 @@
 #include "Marau6DestructibleSection.h"
 #include "Marau6HealingComponent.h"
 #include "Marau6Footsteps.h"
+#include "Sound/SoundBase.h"
+#include "Marau6ItemLedger.h"
+#include "Marau6Audio.h"
 #include "Marau6PlayerController.h"
 #include "Marau6Bot.h"
 #include "GameFramework/GameModeBase.h"
@@ -107,6 +110,11 @@ AMarau6Character::AMarau6Character(const FObjectInitializer& ObjectInitializer)
     static ConstructorHelpers::FObjectFinder<UAnimSequence> Reload(
         TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Reload.MM_Rifle_Reload"));
     ReloadAnimation = Reload.Object;
+    static ConstructorHelpers::FObjectFinder<USoundBase> Cloth(TEXT("/Game/Marau6/Audio/S_Reload_Cloth.S_Reload_Cloth"));
+    static ConstructorHelpers::FObjectFinder<USoundBase> MagOut(TEXT("/Game/Marau6/Audio/S_Reload_MagOut.S_Reload_MagOut"));
+    static ConstructorHelpers::FObjectFinder<USoundBase> MagIn(TEXT("/Game/Marau6/Audio/S_Reload_MagIn.S_Reload_MagIn"));
+    static ConstructorHelpers::FObjectFinder<USoundBase> Charge(TEXT("/Game/Marau6/Audio/S_Reload_Charge.S_Reload_Charge"));
+    ReloadCloth = Cloth.Object; ReloadMagOut = MagOut.Object; ReloadMagIn = MagIn.Object; ReloadCharge = Charge.Object;
     static ConstructorHelpers::FObjectFinder<USkeletalMesh> Rifle(
         TEXT("/Game/Weapons/Lasgun/Meshes/SKM_Lasgun.SKM_Lasgun"));
     if (Rifle.Succeeded())
@@ -160,14 +168,6 @@ void AMarau6Character::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
                     BindInventoryKey(TEXT("ItemDrop"),EKeys::G,&AMarau6Character::DropSelectedItem);
                     BindInventoryKey(TEXT("ItemEquip"),EKeys::F,&AMarau6Character::EquipSelectedItem);
                     BindInventoryKey(TEXT("ItemProtect"),EKeys::P,&AMarau6Character::ProtectSelectedItem);
-                    const FKey HotbarKeys[]={EKeys::One,EKeys::Two,EKeys::Three,EKeys::Four,EKeys::Five,EKeys::Six,EKeys::Seven,EKeys::Eight};
-                    for(int32 N=0;N<Marau6Slots::BackpackCount;N++)
-                    {
-                        UInputAction* Action=NewObject<UInputAction>(this,FName(*FString::Printf(TEXT("Hotbar%d"),N+1)));
-                        Action->ValueType=EInputActionValueType::Boolean;
-                        PrototypeFireMapping->MapKey(Action,HotbarKeys[N]);
-                        EnhancedInputComponent->BindActionValueLambda(Action,ETriggerEvent::Started,[this,N](const FInputActionValue&){HotbarKey(N);});
-                    }
                     UInputAction* HealAction=NewObject<UInputAction>(this,FName(TEXT("ItemHeal")));HealAction->ValueType=EInputActionValueType::Boolean;
                     PrototypeFireMapping->MapKey(HealAction,EKeys::H);EnhancedInputComponent->BindAction(HealAction,ETriggerEvent::Started,Healing.Get(),&UMarau6HealingComponent::UseSelected);
                     auto BindHoldKey = [&](const TCHAR* Name,FKey Key,void (AMarau6Character::*Press)(),void (AMarau6Character::*Release)())
@@ -471,6 +471,15 @@ void AMarau6Character::DoReload()
 
 void AMarau6Character::ServerReload_Implementation()
 {
+    // R reloads straight from the backpack: open as many 20-round boxes into the
+    // reserve as the magazine needs, through the same durable path as dropping a
+    // box on the rifle.
+    if (HasAuthority() && CanParticipate() && GetController() && HasEquippedRifle() && !AmmoState.bReloading
+        && !Healing->IsHealing() && AmmoState.Magazine < PrototypeMagazineCapacity)
+        if (auto* Ledger = GetWorld()->GetSubsystem<UMarau6ItemLedger>())
+            for (int32 Slot = 0; Slot < Marau6Slots::Weapon && AmmoState.Reserve < PrototypeMagazineCapacity - AmmoState.Magazine; ++Slot)
+                if (const FMarau6Item* Box = Inventory->ItemAt(Slot); Box && Box->IsAmmo())
+                    Ledger->Move(Inventory, Box->Id, Marau6Slots::Weapon);
     if (!HasAuthority() || !CanParticipate() || Healing->IsHealing() || !GetController() || !GetWorld()
         || !HasEquippedRifle() || AmmoState.bReloading || AmmoState.Magazine >= PrototypeMagazineCapacity
         || AmmoState.Reserve <= 0)
@@ -550,6 +559,22 @@ void AMarau6Character::OnRep_ReloadPose()
 {
     if (GetNetMode() == NM_DedicatedServer) return;
     ReloadPoseStart = bReloadPose && GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0;
+    // Sounds follow the owner's staged reload (fractions of the 2 s reload); a
+    // cancelled reload stops the ones still pending.
+    for (FTimerHandle& Timer : ReloadSoundTimers) GetWorldTimerManager().ClearTimer(Timer);
+    ReloadSoundTimers.Reset();
+    if (bReloadPose)
+    {
+        const TPair<float, USoundBase*> Cues[] = { {.0f, ReloadCloth}, {.24f, ReloadMagOut}, {.53f, ReloadMagIn},
+            {.70f, ReloadCharge}, {.84f, ReloadCloth} };
+        for (const auto& [At, Sound] : Cues)
+        {
+            if (!Sound) continue;
+            FTimerHandle& Timer = ReloadSoundTimers.AddDefaulted_GetRef();
+            GetWorldTimerManager().SetTimer(Timer, FTimerDelegate::CreateWeakLambda(this, [this, Sound = Sound]()
+                { Footsteps->PlayGear(Sound, Marau6Audio::ReloadVolume); }), FMath::Max(At * PrototypeReloadDuration, .01f), false);
+        }
+    }
     if (!ReloadAnimation) return;
     // Others see the montage on the body; the owner's view model stages its own reload.
     UAnimInstance* Pose = GetMesh()->GetAnimInstance();
@@ -682,7 +707,8 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
     const float Speed = GetCharacterMovement()->IsMovingOnGround() ? GetVelocity().Size2D() : 0.f;
     const float Cadence = FMath::Lerp(.0196f, .0125f, SprintAlpha);
     BobPhase = FMath::Fmod(BobPhase + DeltaSeconds * Speed * Cadence, 2.f * UE_PI);
-    const float BobAmount = FMath::Clamp(Speed / 500.f, 0.f, 1.4f) * (1.f - .1f * SprintAlpha) * Steady;
+    // Walking moves the rifle 30% less than before; sprinting keeps its full swing.
+    const float BobAmount = FMath::Clamp(Speed / 500.f, 0.f, 1.4f) * FMath::Lerp(.7f, .9f, SprintAlpha) * Steady;
     const float Sway = FMath::Cos(BobPhase), Step = FMath::Abs(FMath::Sin(BobPhase));
     const FVector Bob(0.f, Sway * BobAmount * 1.3f,
         -Step * BobAmount * 1.5f + FMath::Sin(GetWorld()->GetTimeSeconds() * 1.6f) * .12f * Steady);
@@ -694,6 +720,7 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
     // magazine, seat the new one, charge, and bring it back.
     FVector ReloadShift = FVector::ZeroVector;
     FRotator ReloadTurn = FRotator::ZeroRotator;
+    float RigAlpha = 1.f;
     if (ReloadPoseStart >= 0.0)
     {
         const float T = static_cast<float>((GetWorld()->GetTimeSeconds() - ReloadPoseStart) / PrototypeReloadDuration);
@@ -701,6 +728,9 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
         auto Pulse = [T](float At, float Width) { return FMath::Max(0.f, 1.f - FMath::Abs(T - At) / Width); };
         const float MagOut = Pulse(.27f, .07f), MagIn = Pulse(.56f, .05f), Charge = Pulse(.73f, .05f);
         ReloadTurn = FRotator(8.f * Body - 6.f * MagOut + 4.f * MagIn, -22.f * Body, 28.f * Body);
+        // Mid-reload the hand rig lets go, so the copied reload clip moves the left hand
+        // off the handguard to the magazine and back; it takes the rifle again to finish.
+        RigAlpha = 1.f - FMath::SmoothStep(.06f, .2f, T) * (1.f - FMath::SmoothStep(.78f, .93f, T));
         ReloadShift = FVector(-2.f * Body - 3.f * Charge, -5.f * Body, 1.f * Body - 2.f * MagOut + 1.5f * MagIn);
     }
 
@@ -720,8 +750,12 @@ void AMarau6Character::UpdateViewModel(float DeltaSeconds)
 
     // The rig reads its aim origin from this pose variable; point it at the aim camera.
     if (UAnimInstance* Anim = FirstPersonMesh->GetAnimInstance())
+    {
         if (FObjectProperty* RigCamera = FindFProperty<FObjectProperty>(Anim->GetClass(), TEXT("First Person Camera")))
             RigCamera->SetObjectPropertyValue_InContainer(Anim, ViewModelAim);
+        if (FNumericProperty* Rig = FindFProperty<FNumericProperty>(Anim->GetClass(), RigAlphaVariable))
+            Rig->SetFloatingPointPropertyValue(Rig->ContainerPtrToValuePtr<void>(Anim), RigAlpha);
+    }
 }
 
 void AMarau6Character::SetRagdoll(bool bEnable)
@@ -848,33 +882,8 @@ void AMarau6Character::InventoryShortcut(FKey Key)
 }
 void AMarau6Character::ToggleInventory()
 {
-    if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;if(bInventoryOpen)bFireNeedsRelease=true;InventoryMoveSource.Invalidate();HotbarArmed=INDEX_NONE;}
+    if(IsLocallyControlled()){bInventoryOpen=!bInventoryOpen;if(bInventoryOpen)bFireNeedsRelease=true;InventoryMoveSource.Invalidate();}
 }
-void AMarau6Character::HotbarKey(int32 Slot)
-{
-    if(!IsLocallyControlled() || bInventoryOpen || !CanParticipate() || Slot<0 || Slot>=Marau6Slots::BackpackCount)return;
-    auto Notice=[this](const FString& Text){HotbarNotice=Text;HotbarNoticeAt=GetWorld()->GetTimeSeconds();};
-    const auto* Item=Inventory->ItemAt(Slot);
-    if(GetHotbarArmedSlot()!=Slot)
-    {
-        SelectedInventorySlot=Slot;HotbarArmed=Slot;
-        if(!Item)Notice(TEXT("Slot vazio."));else if(Item->Kind==EMarau6ItemKind::Scrap)Notice(TEXT("Pecas: sem uso na partida."));else HotbarNoticeAt=-100;
-        return;
-    }
-    if(!Item){Notice(TEXT("Slot vazio."));return;}
-    // Supplies go through the server's healing rules; a press while healing cancels.
-    if(Item->Kind==EMarau6ItemKind::Supply){Healing->UseItem(Item->Id);return;}
-    if(Item->IsRifle() || Item->IsAmmo())
-    {
-        const FString Why=FMarau6InventoryUIModel::MoveReason(Inventory->GetSnapshot().Items,Slot,Marau6Slots::Weapon,false);
-        if(!Why.IsEmpty()){Notice(Item->IsAmmo() && !HasEquippedRifle()?TEXT("Equipe um rifle para usar a municao."):Why);return;}
-        Inventory->ServerMove(Item->Id,Marau6Slots::Weapon);HotbarArmed=INDEX_NONE;
-        Notice(Item->IsRifle()?TEXT("Trocando de rifle..."):TEXT("Abastecendo a reserva com 20 balas..."));return;
-    }
-    Notice(TEXT("Pecas: sem uso na partida."));
-}
-FString AMarau6Character::GetHotbarNotice() const
-{return GetWorld() && GetWorld()->GetTimeSeconds()-HotbarNoticeAt<3.0?HotbarNotice:FString();}
 void AMarau6Character::ConfirmInventoryMove()
 {
     if(!IsLocallyControlled() || !CanParticipate() || !bInventoryOpen)

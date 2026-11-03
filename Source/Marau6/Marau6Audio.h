@@ -13,10 +13,13 @@ namespace Marau6Audio
     // is raised to the level of the old Uzi + report pair (two -18 LUFS layers at
     // .45/.54) that the footsteps were balanced against.
     // Footsteps are ~15 dB quieter at the source than gunfire, so they sit near full volume.
-    static constexpr float ShotOwner = .88f, ShotWorld = 1.05f;
+    // Raised about 6 dB on request (was .88 / 1.05): gunfire should dominate.
+    static constexpr float ShotOwner = 1.8f, ShotWorld = 2.1f;
     static constexpr float GunfireInner = 300.f, GunfireFalloff = 7700.f;
-    static constexpr float StepOwner = .5f, StepWorld = 1.f;
+    static constexpr float StepOwner = .8f, StepWorld = 1.4f;
     static constexpr float LandVolume = .8f, JumpVolume = .6f;
+    // Reload gear sounds are authored near footstep loudness (about -20 LUFS).
+    static constexpr float ReloadVolume = 1.f;
     // Decompression gas on raid entry, pitched up a little for a tighter hiss.
     static constexpr float GasVolume = .5f, GasPitch = 1.15f;
 

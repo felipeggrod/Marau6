@@ -47,7 +47,18 @@ const TArray<FMarau6Item>& AMarau6PlayerController::GetInventoryUIItems() const
             }
         }
     }
-    return CachedBaseItems;
+    if(!bBasicKit)return CachedBaseItems;
+    // Basic kit preview: rifle 20/40, two ammo boxes and a medkit, as the backend mints
+    // them on entry. Fixed preview ids; the profile's own equipment stays untouched.
+    CachedKitItems=CachedBaseItems.FilterByPredicate([](const FMarau6Item& I){return I.Slot>=100;});
+    const TPair<EMarau6ItemKind,int32> Kit[]={{EMarau6ItemKind::Rifle,Marau6Slots::Weapon},{EMarau6ItemKind::Ammo,0},{EMarau6ItemKind::Ammo,1},{EMarau6ItemKind::Supply,2}};
+    for(int32 N=0;N<4;N++)
+    {
+        FMarau6Item I;I.Id=FGuid(0x4B495400,0,0,N+1);I.Kind=Kit[N].Key;I.Slot=Kit[N].Value;
+        if(I.IsRifle()){I.Magazine=20;I.Reserve=40;}
+        CachedKitItems.Add(I);
+    }
+    return CachedKitItems;
 }
 const FMarau6Item* AMarau6PlayerController::InventoryUIItemAt(int32 Slot) const
 {return GetInventoryUIItems().FindByPredicate([Slot](const auto& I){return I.Slot==Slot;});}
@@ -83,12 +94,14 @@ bool AMarau6PlayerController::CaptureInventoryDrag(int32 Slot,FMarau6InventoryUI
     if(HasAuthority())RefreshInventoryContext();
     if(!IsInventoryVisible() || IsInventoryReadOnly() || !InventoryContext.IsValid()){InventoryMessage=TEXT("Inventario indisponivel neste estado.");return false;}
     if(InventoryRequestPending()){InventoryMessage=TEXT("Aguarde a transferencia pendente.");return false;}
+    if(IsKitLocked(Slot)){InventoryMessage=TEXT("Kit basico bloqueado. Troque para o kit personalizado para editar.");return false;}
     const auto* I=InventoryUIItemAt(Slot);if(!I)return false;
     Out=FMarau6InventoryUIRequest();Out.RequestId=FGuid::NewGuid();Out.Context=InventoryContext;Out.Source=Slot;Out.Item=I->Id;Out.Profile=BaseProfile;Out.Revision=InventoryUIRevision();
     SelectInventorySlot(Slot);return true;
 }
 bool AMarau6PlayerController::SubmitInventoryDrop(FMarau6InventoryUIRequest R,int32 Destination)
 {
+    if(IsKitLocked(Destination)){InventoryMessage=TEXT("Kit basico bloqueado. Troque para o kit personalizado para editar.");return false;}
     if(InventoryRequestPending()){InventoryMessage=TEXT("Aguarde a transferencia pendente.");return false;}
     if(IsInventoryReadOnly() || !IsInventoryVisible() || R.Context!=InventoryContext){InventoryMessage=TEXT("O inventario mudou; tente novamente.");return false;}
     const auto* I=InventoryUIItemAt(R.Source);
